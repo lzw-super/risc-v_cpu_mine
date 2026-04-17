@@ -1,0 +1,54 @@
+# ==============================
+# RISC-V Project Gitignore
+# ==============================
+
+# VCS 编译仿真文件
+simv
+simv.daidir/
+simv.csrc/
+csrc/
+vc_hdrs.h
+ucli.key
+urgReport/
+
+# VCS 日志文件
+*.log
+compile.log
+sim.log
+novas_dump.log
+
+# Verdi 波形和配置文件
+*.fsdb
+wave.fsdb
+novas.conf
+novas.rc
+verdiLog/
+
+# VPD 波形文件
+*.vpd
+
+# DVE 文件
+DVEfiles/
+
+# 临时文件
+*.key
+*.conf
+*.rc
+
+# Object 文件
+*.o
+*.so
+
+# 备份文件
+*.bak
+*~
+
+# IDE 相关
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS 相关
+.DS_Store
+Thumbs.db
