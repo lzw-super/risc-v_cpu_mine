@@ -41,13 +41,12 @@ module decoder (
     
         
     always@(*) begin
-
-        case(prog[6:0])                    // Type
+        case(instr[6:0])                    // Type
             7'b0110011: begin               // R-Type  两输入并写入 加减、逻辑操作以及移位等操作 寄存器以及立即数等操作
 
-                rs1         = prog[19:15];  // rs1 implied
-                rs2         = prog[24:20];  // rs2 implied
-                wd          = prog[11:7];   // rd implied
+                rs1         = instr[19:15];  // rs1 implied
+                rs2         = instr[24:20];  // rs2 implied
+                wd          = instr[11:7];   // rd implied
                 imm         = 32'b0;        // imm not implied
                 re1         = _enable;      // rs1 required
                 re2         = _enable;      // rs2 required
@@ -61,9 +60,9 @@ module decoder (
                 dmop        = 'b0;          // memory operation
                 mwe         = _disable;     // memory disable
 
-                case(prog[14:12])           // Func3
+                case(instr[14:12])           // Func3
                     3'b000:                 // add / sub
-                        case(prog[31:25])   // Func7
+                        case(instr[31:25])   // Func7
                             7'b0000000:     // add
                                 aluop = 8'h1;
                             7'b0100000:     // sub
@@ -80,7 +79,7 @@ module decoder (
                     3'b100:                 // xor
                         aluop = 8'h6;
                     3'b101:                 // srl / sra
-                        case(prog[31:25])  // Func7
+                        case(instr[31:25])  // Func7
                             7'b0000000:     // srl
                                 aluop = 8'h7;
                             7'b0100000:     // sra
@@ -100,10 +99,10 @@ module decoder (
                 * ========================================================
                 */
             7'b0010011: begin               // I-Type  与立即数的基础运算
-                rs1         = prog[19:15];  // rs1 implied
+                rs1         = instr[19:15];  // rs1 implied
                 rs2         = 5'b0;         // rs2 not implied
-                wd          = prog[11:7];   // rd implied
-                imm         = {{20{prog[31]}}, prog[31:20]};  // imm implied
+                wd          = instr[11:7];   // rd implied
+                imm         = {{20{instr[31]}}, instr[31:20]};  // imm implied
                 re1         = _enable;      // rs1 required
                 re2         = _disable;     // rs2 not used
                 we          = _enable;      // rd required
@@ -116,7 +115,7 @@ module decoder (
                 dmop        = 'b0;          // memory operation
                 mwe         = _disable;     // memory disable
 
-                case(prog[14:12])          // Func3
+                case(instr[14:12])          // Func3
                     3'b000:                 // addi
                         aluop = 8'h1;
                     3'b001:                 // slli
@@ -128,7 +127,7 @@ module decoder (
                     3'b100:                 // xori
                         aluop = 8'h6;
                     3'b101:                 // srli / srai
-                        case(prog[31:25])  // Func7
+                        case(instr[31:25])  // Func7
                             7'b0000000:     // srli
                                 aluop = 8'h7;
                             7'b0100000:     // srai
@@ -150,8 +149,8 @@ module decoder (
             7'b1101111:   begin             // J-Type : JAL  pc与立即数的运算结果为跳转的目标地址，且写回到regfile
                 rs1         = 5'b0;         // rs1 not implied
                 rs2         = 5'b0;         // rs2 not implied
-                wd          = prog[11:7];   // rd implied
-                imm         = { {11{prog[31]}}, prog[31], prog[19:12], prog[20], prog[30:21], 1'b0 };  // imm implied
+                wd          = instr[11:7];   // rd implied
+                imm         = { {11{instr[31]}}, instr[31], instr[19:12], instr[20], instr[30:21], 1'b0 };  // imm implied
                 re1         = _disable;     // rs1 not used
                 re2         = _disable;     // rs2 not used
                 we          = _enable;      // rd required
@@ -167,10 +166,10 @@ module decoder (
             end
 
             7'b1100111: begin               // I-Type : JALR  rs1与立即数的运算得到跳转地址 
-                rs1         = prog[19:15];  // rs1 implied
+                rs1         = instr[19:15];  // rs1 implied
                 rs2         = 5'b0;         // rs2 not implied
-                wd          = prog[11:7];   // rd implied
-                imm         = { {20{prog[31]}}, prog[31:20] };  // imm implied
+                wd          = instr[11:7];   // rd implied
+                imm         = { {20{instr[31]}}, instr[31:20] };  // imm implied
                 re1         = _enable;      // rs1 used
                 re2         = _disable;     // rs2 not used
                 we          = _enable;      // rd required
@@ -185,10 +184,10 @@ module decoder (
                 mwe         = _disable;     // memory disable
             end
             7'b0000011: begin               // I-Type : LB/LH/LW/LBU/LHU  load指令 
-                rs1         = prog[19:15];  // rs1 implied
+                rs1         = instr[19:15];  // rs1 implied
                 rs2         = 5'b0;         // rs2 not implied
-                wd          = prog[11:7];   // rd implied
-                imm         = { {20{prog[31]}}, prog[31:20] };  // imm implied
+                wd          = instr[11:7];   // rd implied
+                imm         = { {20{instr[31]}}, instr[31:20] };  // imm implied
                 re1         = _enable;      // rs1 used
                 re2         = _disable;     // rs2 not used
                 we          = _enable;      // rd required
@@ -199,14 +198,14 @@ module decoder (
                 aluop       = 8'h1;         // data1 + data2
                 be          = _disable;     // branch disabled
                 bop         = 3'b000;       // branch disabled
-                dmop        = prog[14:12];  // memory operation
+                dmop        = instr[14:12];  // memory operation
                 mwe         = _disable;     // memory enable
             end
             7'b0100011: begin               // S-Type :  store 指令
-                rs1         = prog[19:15];  // rs1 implied
-                rs2         = prog[24:20];         // rs2 not implied
-                wd          = prog[11:7];   // rd implied
-                imm         = { {20{prog[31]}}, prog[31:25],prog[11:7] };  // imm implied
+                rs1         = instr[19:15];  // rs1 implied
+                rs2         = instr[24:20];         // rs2 not implied
+                wd          = instr[11:7];   // rd implied
+                imm         = { {20{instr[31]}}, instr[31:25],instr[11:7] };  // imm implied
                 re1         = _enable;      // rs1 used
                 re2         = _enable;     // rs2 not used
                 we          = _disable;      // rd required
@@ -217,14 +216,14 @@ module decoder (
                 aluop       = 8'h1;         // data1 + data2
                 be          = _disable;     // branch disabled
                 bop         = 3'b000;       // branch disabled
-                dmop        = prog[14:12];  // memory operation
+                dmop        = instr[14:12];  // memory operation
                 mwe         = _enable;      // memory enable
             end
             7'b0110111: begin               // U-Type : LUI 存储高位立即数到regfile
                 rs1         = 5'b0;         // rs1 not implied, but forced to use X0
                 rs2         = 5'b0;         // rs2 not implied
-                wd          = prog[11:7];   // rd implied
-                imm         = { prog[31:12], 12'b0 };  // imm implied
+                wd          = instr[11:7];   // rd implied
+                imm         = { instr[31:12], 12'b0 };  // imm implied
                 re1         = _enable;      // forced to use X0, expecting 32'b0
                 re2         = _disable;     // rs2 not used
                 we          = _enable;      // rd required
@@ -242,8 +241,8 @@ module decoder (
             7'b0010111: begin               // U-Type : AUIPC  立即数加到pc上并存入regfile
                 rs1         = 5'b0;         // rs1 not implied
                 rs2         = 5'b0;         // rs2 not implied
-                wd          = prog[11:7];   // rd implied
-                imm         = { prog[31:12], 12'b0 };  // imm implied
+                wd          = instr[11:7];   // rd implied
+                imm         = { instr[31:12], 12'b0 };  // imm implied
                 re1         = _disable;     // rs1 not used
                 re2         = _disable;     // rs2 not used
                 we          = _enable;      // rd required
@@ -259,10 +258,10 @@ module decoder (
             end
 
             7'b1100011: begin               // B-Type   分支判断类
-                rs1         = prog[19:15];  // rs1 implied
-                rs2         = prog[24:20];  // rs2 implied
+                rs1         = instr[19:15];  // rs1 implied
+                rs2         = instr[24:20];  // rs2 implied
                 wd          = 5'b0;         // rd not implied
-                imm         = {{20{prog[31]}},prog[7],prog[30:25],prog[11:8],1'b0};  // imm implied
+                imm         = {{20{instr[31]}},instr[7],instr[30:25],instr[11:8],1'b0};  // imm implied
                 re1         = _enable;      // rs1 required
                 re2         = _enable;      // rs2 required
                 we          = _disable;     // rd not required
@@ -272,7 +271,7 @@ module decoder (
                 doe         = _disable;     // use Data Out to/Register
                 aluop       = 8'h1;         // data1 + data2
                 be          = _enable;      // branch enabled
-                bop         = prog[14:12];  // branch enabled
+                bop         = instr[14:12];  // branch enabled
                 dmop        = 'b0;          // memory operation
                 mwe         = _disable;     // memory disable
             end
