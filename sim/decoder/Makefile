@@ -1,5 +1,5 @@
 # ==============================
-# CPU模块 VCS + Verdi 联合仿真 Makefile
+# Decoder模块 VCS + Verdi 联合仿真 Makefile
 # ==============================
 
 # 工具路径（如已加入环境变量 PATH，可省略）
@@ -7,7 +7,7 @@ VCS     = vcs
 VERDI   = verdi
 
 # 文件列表
-SRC_FILES = filelist_single.f
+SRC_FILES = filelist.f
 
 # 编译选项
 VCS_COMPILE_OPTS = \
