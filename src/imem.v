@@ -14,7 +14,7 @@ module instr_mem (
 
     // 使用 $readmemh 加载指令文件
     initial begin
-        $readmemh("single_cpu_instructions.hex", imem);
+        $readmemh("pipeline_instructions_advanced.hex", imem);
     end
 
     // 小端序读取

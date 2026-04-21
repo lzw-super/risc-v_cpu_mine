@@ -97,7 +97,8 @@ module pipeline_cpu (
     // PC Module
     pc u_pc (
         .clk(clk),
-        .reset(reset),
+        .reset(reset), 
+        .stall(stall_pc),
         .jmp(ex_branch_target),
         .jmp_en(ex_jmpe || ex_branch_taken),
         .branch_en(ex_branch_taken),

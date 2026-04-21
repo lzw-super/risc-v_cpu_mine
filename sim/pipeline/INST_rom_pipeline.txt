@@ -7,7 +7,7 @@
 00b50633  // ADD  x12, x10, x11   -> x12 = 15 (forwarding test: RAW hazard)
 00c606b3  // ADD  x13, x12, x11   -> x13 = 21 (forwarding test: x12 from EX/MEM)
 00060733  // ADD  x14, x12, x0    -> x14 = 15 (forwarding test: x12 from MEM/WB)
-
+ 
 // Test Load-Use hazard
 0000a183  // LW   x3, 0(x10)       -> Load from memory address x10
 00318133  // ADD  x2, x3, x3       -> Should stall one cycle (Load-Use)

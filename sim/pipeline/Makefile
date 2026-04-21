@@ -22,7 +22,7 @@ simulate: compile
 	./simv $(VCS_RUN_OPTS)
 
 view:
-	$(VERDI) -ssf wave.fsdb &
+	$(VERDI) -ssf pipeline_debug_wave.fsdb &
 
 clean:
 	rm -rf simv* csrc/ vc_hdrs.h ucli.key urgReport/ *.log *.fsdb *.daidir *.vpd DVEfiles/
