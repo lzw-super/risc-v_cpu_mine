@@ -1,8 +1,8 @@
 /*
 解码指令  分析出所需的信号*/
 module decoder (
-    input[31:0] instr , 
-    
+    input[31:0] instr ,
+
     output reg  [4:0]       rs1,    // rs1 address
     output reg  [4:0]       rs2,    // rs2 address
     output reg  [31:0]      imm,    // reconstructed imm value
@@ -15,13 +15,20 @@ module decoder (
     output reg              pce,    // mux_data1  二选一  pc和rs1
     output reg              imme,   // mux_data2 二选一  imm和rs2
 
-    output reg              jmpe,   // pc jump 
+    output reg              jmpe,   // pc jump
     output reg              be,     // branch enable
     output reg  [2:0]       bop,    // opcode funct3 as branch op
     output reg  [2:0]       dmop,   // memory operation
     output reg              doe,    // memory data out enable
-    output reg              mwe     // memory disable
+    output reg              mwe,    // memory disable
+    output reg              is_load,// load instruction flag
+    output reg  [1:0]       wb_sel  // WB data select (新增)
     );
+    // WB Select encoding:
+    // 00: mem_data (Load指令)
+    // 01: alu_out (R型、I型算术、AUIPC等)
+    // 10: imm (LUI指令)
+    // 11: pc+4 (JAL、JALR指令)
     // ALU OP
     // ----------------
     // 0x00: nop
@@ -59,6 +66,8 @@ module decoder (
                 bop         = 3'b000;       // branch disabled
                 dmop        = 'b0;          // memory operation
                 mwe         = _disable;     // memory disable
+                is_load     = _disable;     // not a load instruction
+                wb_sel      = 2'b01;        // select alu_out
 
                 case(instr[14:12])           // Func3
                     3'b000:                 // add / sub
@@ -114,6 +123,8 @@ module decoder (
                 bop         = 3'b000;       // branch disabled
                 dmop        = 'b0;          // memory operation
                 mwe         = _disable;     // memory disable
+                is_load     = _disable;     // not a load instruction
+                wb_sel      = 2'b01;        // select alu_out
 
                 case(instr[14:12])          // Func3
                     3'b000:                 // addi
@@ -163,9 +174,11 @@ module decoder (
                 bop         = 3'b000;       // branch disabled
                 dmop        = 'b0;          // memory operation
                 mwe         = _disable;     // memory disable
+                is_load     = _disable;     // not a load instruction
+                wb_sel      = 2'b11;        // select pc+4 (return address)
             end
 
-            7'b1100111: begin               // I-Type : JALR  rs1与立即数的运算得到跳转地址 
+            7'b1100111: begin               // I-Type : JALR  rs1与立即数的运算得到跳转地址
                 rs1         = instr[19:15];  // rs1 implied
                 rs2         = 5'b0;         // rs2 not implied
                 wd          = instr[11:7];   // rd implied
@@ -182,8 +195,10 @@ module decoder (
                 bop         = 3'b000;       // branch disabled
                 dmop        = 'b0;          // memory operation
                 mwe         = _disable;     // memory disable
+                is_load     = _disable;     // not a load instruction
+                wb_sel      = 2'b11;        // select pc+4 (return address)
             end
-            7'b0000011: begin               // I-Type : LB/LH/LW/LBU/LHU  load指令 
+            7'b0000011: begin               // I-Type : LB/LH/LW/LBU/LHU  load指令
                 rs1         = instr[19:15];  // rs1 implied
                 rs2         = 5'b0;         // rs2 not implied
                 wd          = instr[11:7];   // rd implied
@@ -200,6 +215,8 @@ module decoder (
                 bop         = 3'b000;       // branch disabled
                 dmop        = instr[14:12];  // memory operation
                 mwe         = _disable;     // memory enable
+                is_load     = _enable;      // this is a load instruction
+                wb_sel      = 2'b00;        // select mem_data
             end
             7'b0100011: begin               // S-Type :  store 指令
                 rs1         = instr[19:15];  // rs1 implied
@@ -218,6 +235,8 @@ module decoder (
                 bop         = 3'b000;       // branch disabled
                 dmop        = instr[14:12];  // memory operation
                 mwe         = _enable;      // memory enable
+                is_load     = _disable;     // not a load instruction
+                wb_sel      = 2'b00;        // don't care (we=0)
             end
             7'b0110111: begin               // U-Type : LUI 存储高位立即数到regfile
                 rs1         = 5'b0;         // rs1 not implied, but forced to use X0
@@ -236,6 +255,8 @@ module decoder (
                 bop         = 3'b000;       // branch disabled
                 dmop        = 'b0;          // memory operation
                 mwe         = _disable;     // memory disable
+                is_load     = _disable;     // not a load instruction
+                wb_sel      = 2'b10;        // select imm (LUI)
             end
 
             7'b0010111: begin               // U-Type : AUIPC  立即数加到pc上并存入regfile
@@ -255,6 +276,8 @@ module decoder (
                 bop         = 3'b000;       // branch disabled
                 dmop        = 'b0;          // memory operation
                 mwe         = _disable;     // memory disable
+                is_load     = _disable;     // not a load instruction
+                wb_sel      = 2'b01;        // select alu_out (pc+imm result)
             end
 
             7'b1100011: begin               // B-Type   分支判断类
@@ -271,9 +294,11 @@ module decoder (
                 doe         = _disable;     // use Data Out to/Register
                 aluop       = 8'h1;         // data1 + data2
                 be          = _enable;      // branch enabled
-                bop         = instr[14:12];  // branch enabled
-                dmop        = 'b0;          // memory operation
+                bop         = instr[14:12];  // branch enabled  使用那种分支判断
+                dmop        = 'b0;          // memory operation 是否操作内存
                 mwe         = _disable;     // memory disable
+                is_load     = _disable;     // not a load instruction
+                wb_sel      = 2'b00;        // don't care (we=0)
             end
 
             default: begin
@@ -293,6 +318,8 @@ module decoder (
                 bop         = 3'b000;       // branch disabled
                 dmop        = 'b0;          // memory operation
                 mwe         = _disable;     // memory disable
+                is_load     = _disable;     // not a load instruction
+                wb_sel      = 2'b00;        // default
             end
         endcase
     end 

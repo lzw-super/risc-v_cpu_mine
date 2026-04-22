@@ -9,7 +9,7 @@ module pipeline_imem (
     reg [7:0] imem [1023:0];
 
     initial begin
-        $readmemh("pipeline_instructions_advanced.hex", imem);
+        $readmemh("pipeline_instructions_btb_test.hex", imem);
     end
 
     // 小端序读取

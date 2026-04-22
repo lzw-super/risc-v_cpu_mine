@@ -5,7 +5,7 @@
 ../../src/mem_wb_reg.v
 ../../src/forward_unit.v
 ../../src/hazard_unit.v
-../../src/branch_predict.v
+../../src/btb.v
 ../../src/bht.v
 ../../src/pc.v
 ../../src/regfile.v

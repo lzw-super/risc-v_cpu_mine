@@ -23,8 +23,8 @@ module regfile (
 );
     reg [31:0] regfile [31:0];
 
-    // 写入逻辑：下降沿触发（单周期CPU需要）  多周期则使用上升沿触发
-    always @(negedge clk) begin
+    // 写入逻辑：下降沿触发，确保wb届udan年呢个在一个时钟周期内写入数据，否则需要进一步数据转发
+    always @(negedge clk , posedge reset) begin
         if (reset) begin
             // 复位时将所有寄存器置零
             regfile[0]  <= 32'h0;
