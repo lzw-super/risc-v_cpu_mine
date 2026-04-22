@@ -14,6 +14,5 @@
 ../../src/pipeline_imem.v
 ../../src/decoder.v
 ../../src/branch.v
-../../src/mul2to1_32.v
 ../../src/mul4to1_32.v
-tb_pipeline_debug.v
+tb_pipeline_combined.v

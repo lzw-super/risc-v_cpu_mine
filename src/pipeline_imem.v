@@ -9,8 +9,8 @@ module pipeline_imem (
     reg [7:0] imem [1023:0];
 
     initial begin
-        $readmemh("pipeline_instructions_btb_test.hex", imem);
-    end
+        $readmemh("pipeline_combined_test.hex", imem);
+    end;
 
     // 小端序读取
     assign instr = {imem[address+3],

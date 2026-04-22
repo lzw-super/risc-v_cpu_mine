@@ -3,6 +3,9 @@
 // ==============================
 // IF -> ID -> EX -> MEM -> WB
 // 包含转发单元、冒险检测单元和动态分支预测(BTB+BHT)
+//
+// 分支预测优化：mispredict检测在EX阶段完成，减少1周期惩罚
+// ==============================
 
 module pipeline_cpu (
     input           clk,
@@ -15,7 +18,6 @@ module pipeline_cpu (
     wire [31:0]   if_pc;
     wire [31:0]   if_instr;
     wire [31:0]   if_next_pc_seq;   // 顺序下一个PC (PC+4)
-    wire          if_stall;         // PC暂停控制
     // BTB/BHT预测信号
     wire          if_btb_hit;
     wire [31:0]   if_predicted_target;
@@ -36,8 +38,8 @@ module pipeline_cpu (
     wire          id_pce, id_imme, id_jmpe, id_be;
     wire [2:0]    id_bop, id_dmop;
     wire          id_mwe, id_doe;
-    wire          id_is_load;    // load指令标志（来自decoder）
-    wire [1:0]    id_wb_sel;     // WB数据选择（来自decoder）
+    wire          id_is_load;    // load指令标志
+    wire [1:0]    id_wb_sel;     // WB数据选择
     // 预测信号（来自IF/ID寄存器）
     wire          id_predict_taken;
     wire [31:0]   id_predict_target;
@@ -61,7 +63,7 @@ module pipeline_cpu (
     wire          ex_mwe, ex_mem_read;
     wire [1:0]    ex_wb_sel;     // WB数据选择
     wire [31:0]   ex_pc_next;    // PC+4 用于JAL/JALR写回
-    // 预测信号
+    // 预测信号（用于EX阶段mispredict检测）
     wire          ex_predict_taken;
     wire [31:0]   ex_predict_target;
     wire          ex_btb_hit;
@@ -79,40 +81,29 @@ module pipeline_cpu (
     // Branch result
     wire          ex_branch_taken;
     wire [31:0]   ex_branch_target;
-    // Mispredict detection (moved to EX stage for earlier detection)
+    // Mispredict detection (在EX阶段检测)
     wire          ex_mispredict;
     wire [31:0]   ex_correct_target;
 
     // ========== EX/MEM Register Signals ==========
+    // 仅保留MEM/WB阶段需要的数据信号
     wire [31:0]   mem_alu_out;
-    wire [31:0]   mem_rs2_val;
-    wire [31:0]   mem_imm;           // 立即数
+    wire [31:0]   mem_rs2_val;    // 用于Store指令
+    wire [31:0]   mem_imm;        // 用于LUI写回
     wire [4:0]    mem_rd_addr;
     wire          mem_we;
     wire [2:0]    mem_dmop;
     wire          mem_mwe, mem_mem_read;
-    wire [1:0]    mem_wb_sel;    // WB数据选择
-    wire [31:0]   mem_pc_next;   // PC+4 用于JAL/JALR写回
-    wire          mem_branch_taken;
-    wire [31:0]   mem_pc;
-    // 预测信号
-    wire          mem_predict_taken;
-    wire [31:0]   mem_predict_target;
-    wire          mem_btb_hit;
-    wire          mem_is_branch;
+    wire [1:0]    mem_wb_sel;     // WB数据选择
+    wire [31:0]   mem_pc_next;    // PC+4 用于JAL/JALR写回
 
     // ========== MEM Stage Signals ==========
-    wire [31:0]   mem_data_out;
-    // Mispredict detection
-    wire          mem_mispredict;
-    wire [31:0]   mem_correct_target;
+    wire [31:0]   mem_data_out;   // 内存读取数据
 
     // ========== MEM/WB Register Signals ==========
     wire [31:0]   wb_data;
     wire [4:0]    wb_rd_addr;
     wire          wb_we;
-    wire [1:0]    wb_wb_sel;     // WB数据选择（传递但不直接使用）
-    wire [31:0]   wb_pc_next;    // PC+4（传递但不直接使用）
 
     // ========== Control Signals ==========
     wire          stall_pc;
@@ -125,26 +116,26 @@ module pipeline_cpu (
 
     // ========== IF Stage ==========
 
-    // BTB实例化（更新使用ex_is_branch，因为更新发生在EX阶段）
+    // BTB实例化（查询在IF阶段，更新在EX阶段）
     btb u_btb (
         .clk(clk),
         .reset(reset),
         .fetch_pc(if_pc),
         .btb_hit(if_btb_hit),
         .predicted_target(if_predicted_target),
-        .update_enable(ex_is_branch),  // 使用EX阶段的分支标志
+        .update_enable(ex_is_branch),  // EX阶段分支指令标志
         .branch_pc(ex_pc),
         .actual_target(ex_branch_target),
-        .branch_taken(ex_branch_taken) // exe阶段的实际分支跳转判断
+        .branch_taken(ex_branch_taken)
     );
 
-    // BHT实例化（更新使用ex_is_branch，因为更新发生在EX阶段）
+    // BHT实例化（查询在IF阶段，更新在EX阶段）
     bht u_bht (
         .clk(clk),
         .reset(reset),
         .fetch_pc(if_pc),
         .predict_taken(if_predict_taken),
-        .update_enable(ex_is_branch),  // 使用EX阶段的分支标志
+        .update_enable(ex_is_branch),  // EX阶段分支指令标志
         .branch_pc(ex_pc),
         .actual_taken(ex_branch_taken)
     );
@@ -164,7 +155,7 @@ module pipeline_cpu (
     // 计算正确的目标地址（在EX阶段）
     assign ex_correct_target = ex_branch_taken ? (ex_pc + ex_imm) : (ex_pc + 32'h4);
 
-    // PC重定向控制（使用EX阶段的mispredict）
+    // PC重定向控制
     wire redirect_en;
     wire [31:0] redirect_pc;
     assign redirect_en = ex_mispredict || ex_jmpe;  // Mispredict或JAL/JALR
@@ -179,7 +170,7 @@ module pipeline_cpu (
         .redirect_pc(redirect_pc),
         .redirect_en(redirect_en),
         .curr_pc(if_pc),
-        .next_pc(if_next_pc_seq)  // 输出顺序PC供参考
+        .next_pc(if_next_pc_seq)
     );
 
     // Pipeline Instruction Memory
@@ -197,11 +188,9 @@ module pipeline_cpu (
         .flush(if_id_flush),
         .pc_in(if_pc),
         .instr_in(if_instr),
-        // 预测信号输入（来自IF阶段）
         .predict_taken_in(if_predict_taken),
         .predict_target_in(if_predicted_target),
         .btb_hit_in(if_btb_hit),
-        // 输出到ID阶段
         .pc_out(id_pc),
         .instr_out(id_instr),
         .predict_taken_out(id_predict_taken),
@@ -211,7 +200,6 @@ module pipeline_cpu (
 
     // ========== ID Stage ==========
 
-    // Decoder
     decoder u_decoder (
         .instr(id_instr),
         .rs1(id_rs1_addr),
@@ -225,16 +213,16 @@ module pipeline_cpu (
         .pce(id_pce),
         .imme(id_imme),
         .jmpe(id_jmpe),
-        .be(id_be),  // 分支指令标志（来自decoder）
+        .be(id_be),
         .bop(id_bop),
         .dmop(id_dmop),
         .doe(id_doe),
         .mwe(id_mwe),
-        .is_load(id_is_load),  // load指令标志（来自decoder）
-        .wb_sel(id_wb_sel)     // WB数据选择（来自decoder）
+        .is_load(id_is_load),
+        .wb_sel(id_wb_sel)
     );
 
-    // Regfile - 在流水线中，WB阶段写回
+    // Regfile - WB阶段写回
     regfile u_regfile (
         .clk(clk),
         .reset(reset),
@@ -242,9 +230,9 @@ module pipeline_cpu (
         .rs2(id_rs2_addr),
         .re1(id_re1),
         .re2(id_re2),
-        .wd(wb_rd_addr),        // 来自MEM/WB
-        .we(wb_we),             // 来自MEM/WB
-        .wdata(wb_data),        // 来自MEM/WB
+        .wd(wb_rd_addr),
+        .we(wb_we),
+        .wdata(wb_data),
         .rs1_value(id_rs1_val_raw),
         .rs2_value(id_rs2_val_raw)
     );
@@ -268,16 +256,16 @@ module pipeline_cpu (
         .alu_op_in(id_aluop),
         .dmop_in(id_dmop),
         .mwe_in(id_mwe),
-        .mem_read_in(id_is_load),   // 使用decoder输出的is_load
-        .wb_sel_in(id_wb_sel),      // WB数据选择
-        // Prediction signals（来自IF/ID寄存器，与指令同步）
+        .mem_read_in(id_is_load),
+        .wb_sel_in(id_wb_sel),
+        // Prediction signals
         .predict_taken_in(id_predict_taken),
         .predict_target_in(id_predict_target),
         .btb_hit_in(id_btb_hit),
-        .is_branch_in(id_be),       // 使用decoder输出的be作为分支标志
+        .is_branch_in(id_be),
         // Data
         .pc_in(id_pc),
-        .pc_next_in(id_pc + 32'h4),   // PC+4 用于JAL/JALR写回
+        .pc_next_in(id_pc + 32'h4),
         .rs1_val_in(id_rs1_val_raw),
         .rs2_val_in(id_rs2_val_raw),
         .imm_in(id_imm),
@@ -298,13 +286,13 @@ module pipeline_cpu (
         .dmop_out(ex_dmop),
         .mwe_out(ex_mwe),
         .mem_read_out(ex_mem_read),
-        .wb_sel_out(ex_wb_sel),      // WB数据选择
+        .wb_sel_out(ex_wb_sel),
         .predict_taken_out(ex_predict_taken),
         .predict_target_out(ex_predict_target),
         .btb_hit_out(ex_btb_hit),
-        .is_branch_out(ex_is_branch),  // 输出到EX阶段
+        .is_branch_out(ex_is_branch),
         .pc_out(ex_pc),
-        .pc_next_out(ex_pc_next),     // PC+4 用于JAL/JALR写回
+        .pc_next_out(ex_pc_next),
         .rs1_val_out(ex_rs1_val),
         .rs2_val_out(ex_rs2_val),
         .imm_out(ex_imm),
@@ -328,17 +316,16 @@ module pipeline_cpu (
         .forward_b(forward_b)
     );
 
-    // Forwarding MUX for rs1
+    // Forwarding MUX
     assign ex_data1_forwarded = (forward_a == 2'b01) ? mem_alu_out :
                                 (forward_a == 2'b10) ? wb_data :
                                 ex_rs1_val;
 
-    // Forwarding MUX for rs2
     assign ex_data2_forwarded = (forward_b == 2'b01) ? mem_alu_out :
                                 (forward_b == 2'b10) ? wb_data :
                                 ex_rs2_val;
 
-    // ALU input MUX (PC vs rs1, imm vs rs2)
+    // ALU input MUX
     assign ex_alu_data1 = ex_pce ? ex_pc : ex_data1_forwarded;
     assign ex_alu_data2 = ex_imme ? ex_imm : ex_data2_forwarded;
 
@@ -350,7 +337,7 @@ module pipeline_cpu (
         .res(ex_alu_out)
     );
 
-    // Branch Module - 在EX阶段计算分支
+    // Branch Module
     branch u_branch (
         .enable(ex_be),
         .op(ex_bop),
@@ -367,39 +354,27 @@ module pipeline_cpu (
     ex_mem_reg u_ex_mem (
         .clk(clk),
         .reset(reset),
-        .flush(1'b0),  // 通常不需要flush
+        .flush(1'b0),
         .we_in(ex_we),
         .dmop_in(ex_dmop),
         .mwe_in(ex_mwe),
         .mem_read_in(ex_mem_read),
-        .wb_sel_in(ex_wb_sel),      // WB数据选择
-        .predict_taken_in(ex_predict_taken),
-        .predict_target_in(ex_predict_target),
-        .btb_hit_in(ex_btb_hit),
-        .is_branch_in(ex_is_branch),
+        .wb_sel_in(ex_wb_sel),
         .alu_out_in(ex_alu_out),
         .rs2_val_in(ex_data2_forwarded),
         .imm_in(ex_imm),
         .rd_addr_in(ex_rd_addr),
-        .pc_in(ex_pc),
-        .pc_next_in(ex_pc_next),     // PC+4 用于JAL/JALR写回
-        .branch_taken_in(ex_branch_taken),
+        .pc_next_in(ex_pc_next),
         .we_out(mem_we),
         .dmop_out(mem_dmop),
         .mwe_out(mem_mwe),
         .mem_read_out(mem_mem_read),
-        .wb_sel_out(mem_wb_sel),     // WB数据选择
-        .predict_taken_out(mem_predict_taken),
-        .predict_target_out(mem_predict_target),
-        .btb_hit_out(mem_btb_hit),
-        .is_branch_out(mem_is_branch),
+        .wb_sel_out(mem_wb_sel),
         .alu_out_out(mem_alu_out),
         .rs2_val_out(mem_rs2_val),
         .imm_out(mem_imm),
         .rd_addr_out(mem_rd_addr),
-        .pc_out(mem_pc),
-        .pc_next_out(mem_pc_next),   // PC+4 用于JAL/JALR写回
-        .branch_taken_out(mem_branch_taken)
+        .pc_next_out(mem_pc_next)
     );
 
     // ========== MEM Stage ==========
@@ -415,27 +390,17 @@ module pipeline_cpu (
         .d_out(mem_data_out)
     );
 
-    // ========== Mispredict Detection ==========
-
-    // 检测mispredict：分支指令的预测与实际结果不符
-    assign mem_mispredict = mem_is_branch &&
-        ((mem_predict_taken && !mem_branch_taken) ||
-         (!mem_predict_taken && mem_branch_taken));
-
-    // 计算正确的目标地址
-    assign mem_correct_target = mem_branch_taken ? (mem_pc + mem_imm) : (mem_pc + 32'h4);
-
     // ========== MEM/WB Register ==========
 
     mem_wb_reg u_mem_wb (
         .clk(clk),
         .reset(reset),
         .we_in(mem_we),
-        .wb_sel_in(mem_wb_sel),       // WB数据选择
-        .mem_data_in(mem_data_out),   // 内存读取数据 (v0)
-        .alu_out_in(mem_alu_out),     // ALU结果 (v1)
-        .imm_in(mem_imm),             // 立即数 (v2) - 用于LUI
-        .pc_next_in(mem_pc_next),     // PC+4 (v3) - 用于JAL/JALR
+        .wb_sel_in(mem_wb_sel),
+        .mem_data_in(mem_data_out),
+        .alu_out_in(mem_alu_out),
+        .imm_in(mem_imm),
+        .pc_next_in(mem_pc_next),
         .rd_addr_in(mem_rd_addr),
         .we_out(wb_we),
         .wb_data_out(wb_data),
@@ -461,7 +426,7 @@ module pipeline_cpu (
 
     // ========== Pipeline Flush Control ==========
 
-    // Mispredict时flush IF/ID和ID/EX（在EX阶段检测，减少一个周期惩罚）
+    // Mispredict或跳转指令时flush流水线
     assign if_id_flush = ex_mispredict || ex_jmpe;
     assign id_ex_flush = ex_mispredict || ex_jmpe;
 
