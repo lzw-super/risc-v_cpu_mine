@@ -347,7 +347,11 @@ module pipeline_cpu (
     );
 
     // 分支目标地址
-    assign ex_branch_target = ex_pc + ex_imm;
+    // JAL: target = PC + imm (pce=1时, ALU使用PC)
+    // JALR: target = rs1 + imm (pce=0时, ALU使用rs1)
+    // Branch: target = PC + imm
+    // 使用ALU输出作为跳转目标地址，因为ALU已经正确计算了
+    assign ex_branch_target = ex_jmpe ? ex_alu_out : (ex_pc + ex_imm);
 
     // ========== EX/MEM Register ==========
 
@@ -404,7 +408,8 @@ module pipeline_cpu (
         .rd_addr_in(mem_rd_addr),
         .we_out(wb_we),
         .wb_data_out(wb_data),
-        .rd_addr_out(wb_rd_addr)
+        .rd_addr_out(wb_rd_addr),
+        .wb_sel_out()  // 不需要外部使用，仅用于内部wb_mux
     );
 
     // ========== WB Stage ==========
