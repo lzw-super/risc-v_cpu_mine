@@ -14,18 +14,18 @@ module alu(
                 res = $signed(data1) + $signed(data2);      
             8'h2:           // sub
                 res = $signed(data1) - $signed(data2);
-            8'h3:           // sll / slli
-                res = data1 << data2;
+            8'h3:           // sll / slli (移位量只取低5位)
+                res = data1 << data2[4:0];
             8'h4:           // slt / slti
                 res = ($signed(data1) < $signed(data2)) ? 32'h1 : 32'h0;
-            8'h5:           // sltu / sltui 
-                res = (data1 < data2) ? 32'h1 : 32'h0;          
+            8'h5:           // sltu / sltui
+                res = (data1 < data2) ? 32'h1 : 32'h0;
             8'h6:           // xor / xori
                 res = data1 ^ data2;
-            8'h7:           // srl / srli
-                res = data1 >> data2;
-            8'h8:           // sra / srai
-                res = $signed(data1) >>> data2;
+            8'h7:           // srl / srli (移位量只取低5位)
+                res = data1 >> data2[4:0];
+            8'h8:           // sra / srai (移位量只取低5位)
+                res = $signed(data1) >>> data2[4:0];
             8'h9:           // or / ori
                 res = data1 | data2;
             8'ha:           // and / andi
