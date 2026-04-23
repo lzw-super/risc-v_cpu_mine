@@ -5,6 +5,7 @@
 // 包含转发单元、冒险检测单元和动态分支预测(BTB+BHT)
 //
 // 分支预测优化：mispredict检测在EX阶段完成，减少1周期惩罚
+// J型指令预测：JAL/JALR使用BTB缓存目标地址，动态预测跳转
 // ==============================
 
 module pipeline_cpu (
@@ -40,6 +41,7 @@ module pipeline_cpu (
     wire          id_mwe, id_doe;
     wire          id_is_load;    // load指令标志
     wire [1:0]    id_wb_sel;     // WB数据选择
+    wire          id_is_jump;    // jump指令标志 (JAL/JALR)
     // 预测信号（来自IF/ID寄存器）
     wire          id_predict_taken;
     wire [31:0]   id_predict_target;
@@ -68,6 +70,7 @@ module pipeline_cpu (
     wire [31:0]   ex_predict_target;
     wire          ex_btb_hit;
     wire          ex_is_branch;
+    wire          ex_is_jump;    // jump指令标志
 
     // ========== EX Stage Signals ==========
     // Forwarding
@@ -117,30 +120,35 @@ module pipeline_cpu (
     // ========== IF Stage ==========
 
     // BTB实例化（查询在IF阶段，更新在EX阶段）
+    // 支持分支指令和跳转指令(JAL/JALR)
     btb u_btb (
         .clk(clk),
         .reset(reset),
         .fetch_pc(if_pc),
         .btb_hit(if_btb_hit),
         .predicted_target(if_predicted_target),
-        .update_enable(ex_is_branch),  // EX阶段分支指令标志
+        .update_enable(ex_is_branch || ex_is_jump),  // 分支或跳转指令
+        .is_jump(ex_is_jump),                         // 跳转指令标志
         .branch_pc(ex_pc),
         .actual_target(ex_branch_target),
-        .branch_taken(ex_branch_taken)
+        .branch_taken(ex_branch_taken || ex_jmpe)    // 跳转指令总是跳转
     );
 
     // BHT实例化（查询在IF阶段，更新在EX阶段）
+    // 支持分支指令和跳转指令
     bht u_bht (
         .clk(clk),
         .reset(reset),
         .fetch_pc(if_pc),
         .predict_taken(if_predict_taken),
-        .update_enable(ex_is_branch),  // EX阶段分支指令标志
+        .update_enable(ex_is_branch || ex_is_jump),  // 分支或跳转指令
+        .is_jump(ex_is_jump),                         // 跳转指令标志
         .branch_pc(ex_pc),
-        .actual_taken(ex_branch_taken)
+        .actual_taken(ex_branch_taken || ex_jmpe)    // 跳转指令总是跳转
     );
 
     // 预测逻辑
+    // 跳转指令(JAL/JALR)总是预测跳转，分支指令使用BHT预测
     assign if_predicted_valid = if_predict_taken && if_btb_hit;
     assign if_predicted_pc = if_predicted_valid ? if_predicted_target : (if_pc + 32'h4);
     assign if_next_pc_seq = if_pc + 32'h4;
@@ -148,17 +156,33 @@ module pipeline_cpu (
     // ========== EX Stage Mispredict Detection ==========
 
     // 在EX阶段检测mispredict（比MEM阶段早一个周期）
-    assign ex_mispredict = ex_is_branch &&
+    // 分支指令：预测方向错误
+    // 跳转指令：预测目标地址错误（跳转指令总是跳转，只需检测目标）
+
+    // 分支方向预测错误检测
+    wire ex_branch_dir_mispredict = ex_is_branch &&
         ((ex_predict_taken && !ex_branch_taken) ||
          (!ex_predict_taken && ex_branch_taken));
 
+    // 跳转目标预测错误检测（仅在BTB命中且目标不匹配时）
+    wire ex_jump_target_mispredict = ex_is_jump && ex_btb_hit &&
+        (ex_predict_target != ex_branch_target);
+
+    // 综合mispredict信号
+    assign ex_mispredict = ex_branch_dir_mispredict || ex_jump_target_mispredict;
+
     // 计算正确的目标地址（在EX阶段）
-    assign ex_correct_target = ex_branch_taken ? (ex_pc + ex_imm) : (ex_pc + 32'h4);
+    // 分支不跳转时：PC+4
+    // 分支跳转或跳转指令：实际目标地址
+    assign ex_correct_target = (ex_is_branch && !ex_branch_taken) ? (ex_pc + 32'h4) :
+                               ex_branch_target;
 
     // PC重定向控制
+    // Mispredict修正：使用正确目标地址
+    // 非预测跳转指令首次执行：使用实际目标地址（此时BTB未命中）
     wire redirect_en;
     wire [31:0] redirect_pc;
-    assign redirect_en = ex_mispredict || ex_jmpe;  // Mispredict或JAL/JALR
+    assign redirect_en = ex_mispredict || (ex_jmpe && !ex_btb_hit);
     assign redirect_pc = ex_mispredict ? ex_correct_target : ex_branch_target;
 
     pc u_pc (
@@ -219,7 +243,8 @@ module pipeline_cpu (
         .doe(id_doe),
         .mwe(id_mwe),
         .is_load(id_is_load),
-        .wb_sel(id_wb_sel)
+        .wb_sel(id_wb_sel),
+        .is_jump(id_is_jump)    // 新增：跳转指令标志
     );
 
     // Regfile - WB阶段写回
@@ -263,6 +288,7 @@ module pipeline_cpu (
         .predict_target_in(id_predict_target),
         .btb_hit_in(id_btb_hit),
         .is_branch_in(id_be),
+        .is_jump_in(id_is_jump),    // 新增：跳转指令标志
         // Data
         .pc_in(id_pc),
         .pc_next_in(id_pc + 32'h4),
@@ -291,6 +317,7 @@ module pipeline_cpu (
         .predict_target_out(ex_predict_target),
         .btb_hit_out(ex_btb_hit),
         .is_branch_out(ex_is_branch),
+        .is_jump_out(ex_is_jump),   // 新增：跳转指令标志
         .pc_out(ex_pc),
         .pc_next_out(ex_pc_next),
         .rs1_val_out(ex_rs1_val),
@@ -431,8 +458,11 @@ module pipeline_cpu (
 
     // ========== Pipeline Flush Control ==========
 
-    // Mispredict或跳转指令时flush流水线
-    assign if_id_flush = ex_mispredict || ex_jmpe;
-    assign id_ex_flush = ex_mispredict || ex_jmpe;
+    // Flush流水线条件：
+    // 1. 分支方向预测错误
+    // 2. 跳转目标预测错误
+    // 3. 跳转指令首次执行（BTB未命中，需要建立缓存）
+    assign if_id_flush = ex_mispredict || (ex_jmpe && !ex_btb_hit);
+    assign id_ex_flush = ex_mispredict || (ex_jmpe && !ex_btb_hit);
 
 endmodule

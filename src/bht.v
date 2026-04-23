@@ -4,6 +4,9 @@
 // 使用2位饱和计数器预测分支行为
 // 状态机：00=强不跳, 01=弱不跳, 10=弱跳, 11=强跳
 // 预测规则：最高位=1预测跳转，最高位=0预测不跳转
+//
+// 跳转指令(JAL/JALR)总是跳转，不需要方向预测，
+// 但BHT仍会更新状态以保持一致性
 
 module bht #(
     parameter BHT_ENTRIES    = 256,      // BHT表大小
@@ -16,10 +19,11 @@ module bht #(
     input  [31:0]   fetch_pc,
     output          predict_taken,       // 预测是否跳转
 
-    // EX阶段更新（分支执行后）
-    input           update_enable,       // 更新使能（是分支指令）
-    input  [31:0]   branch_pc,           // 分支指令的PC
-    input           actual_taken         // 实际分支结果
+    // EX阶段更新（分支/跳转执行后）
+    input           update_enable,       // 更新使能（是分支或跳转指令）
+    input           is_jump,             // 是否是跳转指令 (JAL/JALR)
+    input  [31:0]   branch_pc,           // 分支/跳转指令的PC
+    input           actual_taken         // 实际分支/跳转结果
 );
 
     // BHT存储：每个entry 2-bit计数器
@@ -40,19 +44,24 @@ module bht #(
         if (reset) begin
             // 复位时初始化为"弱不跳"（01）
             // 保守初始状态，假设分支大概率不跳转
+            // 注意：跳转指令首次执行时会立即更新为强跳转
             for (i = 0; i < BHT_ENTRIES; i = i + 1) begin
                 bht_table[i] <= 2'b01;
             end
         end
         else if (update_enable) begin
-            // 根据实际结果更新计数器
-            if (actual_taken) begin
-                // 实际跳转：计数器递增（饱和在11）
+            if (is_jump) begin
+                // 跳转指令总是跳转，直接设置为"强跳转"(11)
+                // 这确保后续预测正确
+                bht_table[update_index] <= 2'b11;
+            end
+            else if (actual_taken) begin
+                // 分支指令实际跳转：计数器递增（饱和在11）
                 if (bht_table[update_index] != 2'b11)
                     bht_table[update_index] <= bht_table[update_index] + 1;
             end
             else begin
-                // 实际不跳转：计数器递减（饱和在00）
+                // 分支指令实际不跳转：计数器递减（饱和在00）
                 if (bht_table[update_index] != 2'b00)
                     bht_table[update_index] <= bht_table[update_index] - 1;
             end

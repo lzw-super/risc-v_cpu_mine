@@ -22,7 +22,8 @@ module decoder (
     output reg              doe,    // memory data out enable
     output reg              mwe,    // memory disable
     output reg              is_load,// load instruction flag
-    output reg  [1:0]       wb_sel  // WB data select (新增)
+    output reg  [1:0]       wb_sel, // WB data select (新增)
+    output reg              is_jump // jump instruction flag (新增: JAL/JALR)
     );
     // WB Select encoding:
     // 00: mem_data (Load指令)
@@ -68,6 +69,7 @@ module decoder (
                 mwe         = _disable;     // memory disable
                 is_load     = _disable;     // not a load instruction
                 wb_sel      = 2'b01;        // select alu_out
+                is_jump     = _disable;     // not a jump instruction
 
                 case(instr[14:12])           // Func3
                     3'b000:                 // add / sub
@@ -125,6 +127,7 @@ module decoder (
                 mwe         = _disable;     // memory disable
                 is_load     = _disable;     // not a load instruction
                 wb_sel      = 2'b01;        // select alu_out
+                is_jump     = _disable;     // not a jump instruction
 
                 case(instr[14:12])          // Func3
                     3'b000:                 // addi
@@ -176,6 +179,7 @@ module decoder (
                 mwe         = _disable;     // memory disable
                 is_load     = _disable;     // not a load instruction
                 wb_sel      = 2'b11;        // select pc+4 (return address)
+                is_jump     = _enable;      // JAL is a jump instruction
             end
 
             7'b1100111: begin               // I-Type : JALR  rs1与立即数的运算得到跳转地址
@@ -197,6 +201,7 @@ module decoder (
                 mwe         = _disable;     // memory disable
                 is_load     = _disable;     // not a load instruction
                 wb_sel      = 2'b11;        // select pc+4 (return address)
+                is_jump     = _enable;      // JALR is a jump instruction
             end
             7'b0000011: begin               // I-Type : LB/LH/LW/LBU/LHU  load指令
                 rs1         = instr[19:15];  // rs1 implied
@@ -217,6 +222,7 @@ module decoder (
                 mwe         = _disable;     // memory enable
                 is_load     = _enable;      // this is a load instruction
                 wb_sel      = 2'b00;        // select mem_data
+                is_jump     = _disable;     // not a jump instruction
             end
             7'b0100011: begin               // S-Type :  store 指令
                 rs1         = instr[19:15];  // rs1 implied
@@ -237,6 +243,7 @@ module decoder (
                 mwe         = _enable;      // memory enable
                 is_load     = _disable;     // not a load instruction
                 wb_sel      = 2'b00;        // don't care (we=0)
+                is_jump     = _disable;     // not a jump instruction
             end
             7'b0110111: begin               // U-Type : LUI 存储高位立即数到regfile
                 rs1         = 5'b0;         // rs1 not implied, but forced to use X0
@@ -257,6 +264,7 @@ module decoder (
                 mwe         = _disable;     // memory disable
                 is_load     = _disable;     // not a load instruction
                 wb_sel      = 2'b10;        // select imm (LUI)
+                is_jump     = _disable;     // not a jump instruction
             end
 
             7'b0010111: begin               // U-Type : AUIPC  立即数加到pc上并存入regfile
@@ -278,6 +286,7 @@ module decoder (
                 mwe         = _disable;     // memory disable
                 is_load     = _disable;     // not a load instruction
                 wb_sel      = 2'b01;        // select alu_out (pc+imm result)
+                is_jump     = _disable;     // not a jump instruction
             end
 
             7'b1100011: begin               // B-Type   分支判断类
@@ -299,6 +308,7 @@ module decoder (
                 mwe         = _disable;     // memory disable
                 is_load     = _disable;     // not a load instruction
                 wb_sel      = 2'b00;        // don't care (we=0)
+                is_jump     = _disable;     // not a jump instruction (branch)
             end
 
             default: begin
@@ -320,7 +330,8 @@ module decoder (
                 mwe         = _disable;     // memory disable
                 is_load     = _disable;     // not a load instruction
                 wb_sel      = 2'b00;        // default
+                is_jump     = _disable;     // not a jump instruction
             end
         endcase
-    end 
+    end
 endmodule

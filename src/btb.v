@@ -1,10 +1,11 @@
 // ==============================
 // 分支目标缓冲 (Branch Target Buffer, BTB)
 // ==============================
-// BTB缓存分支指令的目标地址，加速分支预测
-// 与BHT配合使用：
-//   - BHT：预测是否跳转
-//   - BTB：预测跳转到哪里
+// BTB缓存分支/跳转指令的目标地址，加速预测
+// 支持指令类型：
+//   - B-Type分支 (BEQ/BNE/BLT/BGE/BLTU/BGEU)
+//   - J-Type跳转 (JAL) - 目标地址固定，可完美预测
+//   - I-Type跳转 (JALR) - 间接跳转，缓存最近目标地址
 //
 // 结构：
 //   - 256条目，每个条目包含：valid位、tag(12位)、target地址(32位)
@@ -24,11 +25,12 @@ module btb #(
     output          btb_hit,
     output [31:0]   predicted_target,
 
-    // EX阶段更新（分支执行后）
-    input           update_enable,       // 更新使能（是分支指令）
-    input  [31:0]   branch_pc,           // 分支指令的PC
-    input  [31:0]   actual_target,       // 实际分支目标地址
-    input           branch_taken         // 实际是否跳转
+    // EX阶段更新（分支/跳转执行后）
+    input           update_enable,       // 更新使能（是分支或跳转指令）
+    input           is_jump,             // 是否是跳转指令 (JAL/JALR)
+    input  [31:0]   branch_pc,           // 分支/跳转指令的PC
+    input  [31:0]   actual_target,       // 实际分支/跳转目标地址
+    input           branch_taken         // 实际是否跳转（对于jump总是1）
 );
 
     // BTB存储结构
@@ -57,7 +59,9 @@ module btb #(
     assign predicted_target = btb_hit ? target_array[fetch_index] : 32'h0;
 
     // BTB更新逻辑（同步逻辑）
-    // 当分支实际跳转时，将目标地址缓存到BTB
+    // 更新条件：
+    //   - 分支指令：实际跳转时更新 (branch_taken=1)
+    //   - 跳转指令：总是更新 (is_jump=1, 跳转指令总是跳转)
     integer i;
     always @(posedge clk or posedge reset) begin
         if (reset) begin
@@ -68,8 +72,8 @@ module btb #(
                 target_array[i] <= 32'h0;
             end
         end
-        else if (update_enable && branch_taken) begin
-            // 遇到分支指令且分支实际跳转时，缓存目标地址
+        else if (update_enable && (branch_taken || is_jump)) begin
+            // 分支指令实际跳转时，或跳转指令（总是跳转）时，缓存目标地址
             valid[update_index] <= 1'b1;
             tag_array[update_index] <= update_tag;
             target_array[update_index] <= actual_target;

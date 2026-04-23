@@ -15,7 +15,7 @@ module id_ex_reg (
     input           imme_in,    // 立即数选择
     input           pce_in,     // PC选择（ALU输入A）
     input           jmpe_in,    // 跳转使能
-    input           be_in,      // 分支使能 
+    input           be_in,      // 分支使能
     input  [2:0]    bop_in,     // 分支操作类型
     input  [7:0]    alu_op_in,  // ALU操作
     input  [2:0]    dmop_in,    // 数据内存操作类型
@@ -23,11 +23,14 @@ module id_ex_reg (
     input           mem_read_in, // 内存读使能
     input  [1:0]    wb_sel_in,  // WB数据选择信号
 
-    // 分支预测信号（新增）
+    // 分支预测信号
     input           predict_taken_in,  // 预测跳转
     input  [31:0]   predict_target_in, // 预测目标地址
     input           btb_hit_in,        // BTB命中
-    input           is_branch_in,      // 是否是分支指令  与be_in 一样 之后可以替换成一个
+    input           is_branch_in,      // 是否是分支指令
+
+    // 跳转指令信号（新增）
+    input           is_jump_in,        // 是否是跳转指令(JAL/JALR)
 
     // 来自ID阶段的数据
     input  [31:0]   pc_in,
@@ -55,11 +58,14 @@ module id_ex_reg (
     output reg          mem_read_out,
     output reg [1:0]    wb_sel_out,  // WB数据选择信号
 
-    // 分支预测信号输出（新增）
+    // 分支预测信号输出
     output reg          predict_taken_out,
     output reg [31:0]   predict_target_out,
     output reg          btb_hit_out,
     output reg          is_branch_out,
+
+    // 跳转指令信号输出（新增）
+    output reg          is_jump_out,
 
     output reg [31:0]   pc_out,
     output reg [31:0]   pc_next_out, // PC+4 用于JAL/JALR写回
@@ -88,11 +94,12 @@ module id_ex_reg (
             mwe_out       <= 1'b0;
             mem_read_out  <= 1'b0;
             wb_sel_out    <= 2'b0;        // WB选择初始化
-            // 新增信号初始化
+            // 预测信号初始化
             predict_taken_out <= 1'b0;
             predict_target_out <= 32'h0;
             btb_hit_out <= 1'b0;
             is_branch_out <= 1'b0;
+            is_jump_out   <= 1'b0;        // 跳转指令标志初始化
             pc_out        <= 32'h0;
             pc_next_out   <= 32'h0;       // PC+4初始化
             rs1_val_out   <= 32'h0;
@@ -119,10 +126,11 @@ module id_ex_reg (
             mem_read_out  <= 1'b0;
             wb_sel_out    <= 2'b0;        // WB选择清空
             instr_out     <= 32'h00000013;  // NOP
-            // 新增信号清空
+            // 预测信号清空
             predict_taken_out <= 1'b0;
             btb_hit_out <= 1'b0;
             is_branch_out <= 1'b0;
+            is_jump_out   <= 1'b0;        // 跳转指令标志清空
             // 数据保持不变或清零
             if (flush) begin
                 pc_out        <= 32'h0;
@@ -151,11 +159,12 @@ module id_ex_reg (
             mwe_out       <= mwe_in;
             mem_read_out  <= mem_read_in;
             wb_sel_out    <= wb_sel_in;   // WB选择传递
-            // 新增信号传递
+            // 预测信号传递
             predict_taken_out <= predict_taken_in;
             predict_target_out <= predict_target_in;
             btb_hit_out <= btb_hit_in;
             is_branch_out <= is_branch_in;
+            is_jump_out   <= is_jump_in;  // 跳转指令标志传递
             pc_out        <= pc_in;
             pc_next_out   <= pc_next_in;  // PC+4传递
             rs1_val_out   <= rs1_val_in;

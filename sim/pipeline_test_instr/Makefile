@@ -12,7 +12,7 @@ VERDI   = verdi
 VCS_OPTS = -full64 -sverilog -timescale=1ns/1ps -LDFLAGS -Wl,--no-as-needed +define+FSDB -debug_acc+all -kdb -fsdb
 
 # 测试目标列表
-TESTS = r_type i_type load_store branch jump lui_auipc hazard_forward btb_bht all_tests
+TESTS = r_type i_type load_store branch jump lui_auipc hazard_forward btb_bht jump_predict all_tests
 
 .PHONY: all clean $(TESTS)
 
@@ -63,6 +63,11 @@ btb_bht:
 	cd btb_bht && ./simv -l sim.log
 	cd btb_bht && mv simv* csrc vc_hdrs.h ucli.key urgReport *.daidir *.vpd DVEfiles . 2>/dev/null || true
 
+jump_predict:
+	cd jump_predict && $(VCS) $(VCS_OPTS) -f filelist.f -l compile.log
+	cd jump_predict && ./simv -l sim.log
+	cd jump_predict && mv simv* csrc vc_hdrs.h ucli.key urgReport *.daidir *.vpd DVEfiles . 2>/dev/null || true
+
 all_tests:
 	cd all_tests && $(VCS) $(VCS_OPTS) -f filelist.f -l compile.log
 	cd all_tests && ./simv -l sim.log
@@ -94,6 +99,9 @@ view_hazard_forward:
 
 view_btb_bht:
 	$(VERDI) -ssf btb_bht/wave.fsdb &
+
+view_jump_predict:
+	$(VERDI) -ssf jump_predict/wave.fsdb &
 
 view_all:
 	$(VERDI) -ssf all_tests/wave.fsdb &
