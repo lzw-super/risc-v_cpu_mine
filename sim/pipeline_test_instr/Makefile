@@ -17,7 +17,7 @@ RUN_ENV = LD_LIBRARY_PATH=$(COMPAT_DIR):$$LD_LIBRARY_PATH
 VCS_OPTS = -full64 -sverilog -timescale=1ns/1ps -LDFLAGS "-Wl,--no-as-needed $(COMPAT_LIB)" +define+FSDB -debug_acc+all -kdb -fsdb
 
 # 测试目标列表
-TESTS = r_type i_type load_store branch jump lui_auipc hazard_forward btb_bht jump_predict all_tests
+TESTS = r_type i_type load_store branch jump lui_auipc hazard_forward btb_bht jump_predict baseline_a all_tests
 
 .PHONY: all clean $(TESTS)
 
@@ -72,6 +72,11 @@ jump_predict:
 	cd jump_predict && $(VCS) $(VCS_OPTS) -f filelist.f -l compile.log
 	cd jump_predict && $(RUN_ENV) ./simv -l sim.log
 	cd jump_predict && mv simv* csrc vc_hdrs.h ucli.key urgReport *.daidir *.vpd DVEfiles . 2>/dev/null || true
+
+baseline_a:
+	cd baseline_a && $(VCS) $(VCS_OPTS) -f filelist.f -l compile.log
+	cd baseline_a && $(RUN_ENV) ./simv -l sim.log
+	cd baseline_a && mv simv* csrc vc_hdrs.h ucli.key urgReport *.daidir *.vpd DVEfiles . 2>/dev/null || true
 
 all_tests:
 	cd all_tests && $(VCS) $(VCS_OPTS) -f filelist.f -l compile.log

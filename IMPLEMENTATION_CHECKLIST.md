@@ -32,10 +32,10 @@
 | --- | --- | --- |
 | RV32I 基础整数指令集全部指令 | 基本完成，覆盖 R/I/load/store/branch/jump/U 型 | 保留逐条指令回归，补充异常边界值和随机组合程序 |
 | RV32M 乘除法扩展全部指令 | 未实现 | 增加 `MUL/MULH/MULHSU/MULHU/DIV/DIVU/REM/REMU` 解码、执行单元、流水线 stall/前递策略和测试 |
-| A: 经典 5 级流水线 | 已完成 IF/ID/EX/MEM/WB | 用架构图和波形截图固化文档证据 |
-| A: forwarding | 已完成 | 增加覆盖 rd=x0、EX/MEM 优先级、MEM/WB 回退的用例 |
-| A: 数据冒险和控制冒险处理 | 已完成基础处理 | 补充 load 后接 branch/store/jump 等交叉用例 |
-| A: 稳定运行无死循环、无功能错误 | 用户已完成功能仿真验证 | 将每次回归的 `sim.log` 和通过截图归档到提交材料 |
+| A: 经典 5 级流水线 | 已完成 IF/ID/EX/MEM/WB，并通过 `baseline_a` 与 `all_tests` 回归观测 | 归档关键波形截图作为提交材料 |
+| A: forwarding | 已完成，并通过 `baseline_a` 覆盖 rd=x0、EX/MEM 优先级、MEM/WB 回退 | 后续可继续扩展随机依赖序列 |
+| A: 数据冒险和控制冒险处理 | 已完成基础处理，并通过 `baseline_a` 覆盖 load 后接 ALU/branch/store/JALR 与错误路径 flush | 保留交叉用例回归 |
+| A: 稳定运行无死循环、无功能错误 | `baseline_a`、`hazard_forward`、`branch`、`jump`、`btb_bht`、`jump_predict`、`all_tests` 已回归通过 | 将 `sim.log` 和通过截图归档到提交材料 |
 | B: 分支预测 | 已完成 BTB+BHT 动态预测 | 增加 cycle counter、mispredict counter，量化开启/关闭预测的收益 |
 | B: 静态多发射 | 未计划 | 若时间有限，不作为主线 |
 | B: 乱序执行前端 | 未计划 | 若时间有限，不作为主线 |
@@ -55,10 +55,10 @@
 - [x] 新增 `syn/run_dc.tcl`，默认顶层为 `pipeline_cpu_fpga`。
 - [x] 新增 `syn/Makefile`，支持一条命令运行综合。
 - [x] 跑通 `make -C syn check`，确认 analyze/elaborate/link/check 可重复。
-- [ ] 跑通 `make -C syn synth`，得到快速映射结果；当前 300s 超时点停在 `datamem.mem` 标准单元映射。
+- [ ] 跑通 `make -C syn synth`，得到快速映射结果；隔离 worktree 本轮未运行，需在综合环境重新执行并归档报告。
 - [ ] 跑通 `make -C syn ultra`，得到最终 PPA 报告。
 - [x] 检查 `reports/pipeline_cpu_fpga.check.rpt`，当前已无 latch、多驱动、组合环和端口方向冲突；剩余 lint 主要是未使用高位索引、monitor 直通和常量控制位。
-- [ ] 检查 `reports/pipeline_cpu_fpga.constraints.rpt`，确认无时序约束违例。
+- [ ] 检查 `reports/pipeline_cpu_fpga.constraints.rpt`；隔离 worktree 中未包含未跟踪综合报告，本轮未重新运行 DC，需在综合环境中重新生成并确认。
 - [ ] 检查 `outputs/pipeline_cpu_fpga_mapped.v`，确认映射到 Nangate45 标准单元。
 - [ ] 记录初版 PPA：cell count、area、critical path、slack、power。
 
@@ -75,6 +75,28 @@ make -C syn ultra
 ```sh
 make -C syn synth CLK_PERIOD_NS=8.0
 ```
+
+## Baseline(A) 验证记录
+
+2026-06-01 baseline(A) 回归目标：
+
+```sh
+make -C sim/pipeline_test_instr baseline_a
+make -C sim/pipeline_test_instr hazard_forward
+make -C sim/pipeline_test_instr branch
+make -C sim/pipeline_test_instr jump
+make -C sim/pipeline_test_instr btb_bht
+make -C sim/pipeline_test_instr jump_predict
+make -C sim/pipeline_test_instr all_tests
+```
+
+本轮回归结果：除 `jump` 外的上述目标均输出 `[PASS]` 且无 `[FAIL]`；`jump` 目标按既有 testbench 判据，以无 `[FAIL]`、无仿真错误并正常结束作为通过依据，后续可补充显式 `[PASS]` 标记。
+
+`baseline_a` 覆盖：
+
+- forwarding：rd=x0 过滤、EX/MEM 优先级、MEM/WB 回退。
+- load-use：load 后接 ALU、branch、store、JALR。
+- control hazard：branch/JALR 重定向后错误路径寄存器写入和内存写入不提交。
 
 ## 第二阶段：RV32M 硬性补齐
 
@@ -136,3 +158,4 @@ make -C syn synth CLK_PERIOD_NS=8.0
 - `make -C syn ultra` 可能在映射 `datamem` 大寄存器阵列时耗时较长；若只做 RTL 可综合性检查，优先用 `make -C syn check`。
 - `make -C syn check` 会生成 elaborated netlist，不等同于最终 mapped netlist；最终 PPA 仍需跑 `make -C syn synth` 或 `make -C syn ultra`。
 - 正式参赛要求 UDA/UVS/UVSYN 平台材料；本地 DC 报告适合早期自检，但最终提交要按赛事平台复现。
+- baseline(A) 功能回归已在隔离 worktree 通过；综合报告未纳入该 worktree，仍需在综合环境中重新生成并处理约束/PPA 闭环。
