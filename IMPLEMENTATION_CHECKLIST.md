@@ -55,12 +55,13 @@
 - [x] 新增 `syn/run_dc.tcl`，默认顶层为 `pipeline_cpu_fpga`。
 - [x] 新增 `syn/Makefile`，支持一条命令运行综合。
 - [x] 跑通 `make -C syn check`，确认 analyze/elaborate/link/check 可重复。
-- [ ] 跑通 `make -C syn synth`，得到快速映射结果；隔离 worktree 本轮未运行，需在综合环境重新执行并归档报告。
+- [x] 跑通 `make -C syn synth`，得到快速映射结果；2026-06-01 使用 `pipeline_cpu_fpga`、10 ns、quick compile 生成 mapped netlist 和 PPA 报告。
 - [ ] 跑通 `make -C syn ultra`，得到最终 PPA 报告。
 - [x] 检查 `reports/pipeline_cpu_fpga.check.rpt`，当前已无 latch、多驱动、组合环和端口方向冲突；剩余 lint 主要是未使用高位索引、monitor 直通和常量控制位。
-- [ ] 检查 `reports/pipeline_cpu_fpga.constraints.rpt`；隔离 worktree 中未包含未跟踪综合报告，本轮未重新运行 DC，需在综合环境中重新生成并确认。
-- [ ] 检查 `outputs/pipeline_cpu_fpga_mapped.v`，确认映射到 Nangate45 标准单元。
-- [ ] 记录初版 PPA：cell count、area、critical path、slack、power。
+- [x] 检查 `reports/pipeline_cpu_fpga.constraints.rpt`；10 ns setup/hold 时序已满足，但仍有 max_transition、max_capacitance、max_fanout 设计规则违例。
+- [ ] 闭环 `reports/pipeline_cpu_fpga.constraints.rpt` 中的设计规则违例，重点处理 `datamem`、BTB reset 和全局 reset 等高扇出/大负载网络。
+- [x] 检查 `outputs/pipeline_cpu_fpga_mapped.v`，已确认映射到 Nangate45 标准单元。
+- [x] 记录初版 PPA：122583 cells，cell area 248272.699964，critical path 6.32 ns，slack 3.63 ns，dynamic power 16.1542 mW，leakage power 4.9368 mW。
 
 默认综合命令：
 
@@ -75,6 +76,25 @@ make -C syn ultra
 ```sh
 make -C syn synth CLK_PERIOD_NS=8.0
 ```
+
+## 综合/PPA 记录
+
+2026-06-01 快速综合命令：
+
+```sh
+make -C syn synth
+```
+
+综合配置：`TOP=pipeline_cpu_fpga`，`CLK_PERIOD_NS=10.0`，`COMPILE_MODE=quick`，目标库为 Nangate45。
+
+快速综合结果：
+
+- 输出文件：`syn/outputs/pipeline_cpu_fpga_mapped.v`、`pipeline_cpu_fpga.ddc`、`pipeline_cpu_fpga.sdc`、`pipeline_cpu_fpga.sdf`。
+- 规模：122583 cells，100698 combinational cells，21856 sequential cells，macro/black box 为 0。
+- 面积：cell area 248272.699964；其中 `u_datamem` 约占 53.0%，`u_btb` 约占 37.4%。
+- 时序：10 ns 约束下 critical path 6.32 ns，setup slack 3.63 ns，TNS 0，violating paths 0。
+- 功耗：total dynamic power 16.1542 mW，cell leakage power 4.9368 mW；该结果来自低精度、未标注 activity 的 DC 初版估算，仅作趋势参考，最终需结合代表性仿真活动文件重新评估。
+- 约束：仍存在大量设计规则违例，QoR 汇总为 max transition 24610、max capacitance 35、max fanout 36；当前报告中的主要来源包括寄存器阵列实现的 `datamem`、`u_btb/n12156`、全局 reset，以及少量 `u_ex_mem`/`u_pc` 网络，后续需通过 SRAM macro、缩小表项或更强约束/缓冲优化闭环。
 
 ## Baseline(A) 验证记录
 
@@ -158,4 +178,4 @@ make -C sim/pipeline_test_instr all_tests
 - `make -C syn ultra` 可能在映射 `datamem` 大寄存器阵列时耗时较长；若只做 RTL 可综合性检查，优先用 `make -C syn check`。
 - `make -C syn check` 会生成 elaborated netlist，不等同于最终 mapped netlist；最终 PPA 仍需跑 `make -C syn synth` 或 `make -C syn ultra`。
 - 正式参赛要求 UDA/UVS/UVSYN 平台材料；本地 DC 报告适合早期自检，但最终提交要按赛事平台复现。
-- baseline(A) 功能回归已在隔离 worktree 通过；综合报告未纳入该 worktree，仍需在综合环境中重新生成并处理约束/PPA 闭环。
+- baseline(A) 功能回归已在隔离 worktree 和主分支合并后通过；快速综合/PPA 报告已生成，但 max_transition、max_capacitance、max_fanout 设计规则违例仍需后续优化闭环。
