@@ -39,6 +39,17 @@ DVEfiles/
 *.o
 *.so
 
+# Design Compiler 生成文件
+/syn/work/
+/syn/reports/
+/syn/outputs/
+/syn/alib-52/
+/syn/*.log
+/syn/*.svf
+/syn/*.mr
+/syn/*.pvl
+/syn/*.syn
+
 # 备份文件
 *.bak
 *~

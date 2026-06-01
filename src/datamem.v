@@ -23,6 +23,9 @@ module datamem (
 
     // 控制逻辑
     always @(*) begin
+        data_in_buff = d_out_wire;
+        d_out = 32'b0;
+
         if (reset) begin
             data_in_buff  = 32'b0;
             d_out = 32'b0;

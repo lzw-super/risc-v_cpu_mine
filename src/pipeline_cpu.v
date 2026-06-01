@@ -19,7 +19,6 @@ module pipeline_cpu (
     // ========== IF Stage Signals ==========
     wire [31:0]   if_pc;
     wire [31:0]   if_instr;
-    wire [31:0]   if_next_pc_seq;   // 顺序下一个PC (PC+4)
     // BTB/BHT预测信号
     wire          if_btb_hit;
     wire [31:0]   if_predicted_target;
@@ -152,7 +151,6 @@ module pipeline_cpu (
     // 跳转指令(JAL/JALR)总是预测跳转，分支指令使用BHT预测
     assign if_predicted_valid = if_predict_taken && if_btb_hit;
     assign if_predicted_pc = if_predicted_valid ? if_predicted_target : (if_pc + 32'h4);
-    assign if_next_pc_seq = if_pc + 32'h4;
 
     // ========== EX Stage Mispredict Detection ==========
 
@@ -195,7 +193,7 @@ module pipeline_cpu (
         .redirect_pc(redirect_pc),
         .redirect_en(redirect_en),
         .curr_pc(if_pc),
-        .next_pc(if_next_pc_seq)
+        .next_pc()
     );
 
     // Pipeline Instruction Memory
