@@ -7,11 +7,15 @@ VERDI   = verdi
 
 SRC_FILES = filelist.f
 
+COMPAT_DIR := $(shell cd .. && pwd)
+COMPAT_LIB = -L$(COMPAT_DIR) -lpthread_yield_compat
+RUN_ENV = LD_LIBRARY_PATH=$(COMPAT_DIR):$$LD_LIBRARY_PATH
+
 VCS_COMPILE_OPTS = \
 	-full64 \
 	-sverilog \
 	-timescale=1ns/1ps \
-	-LDFLAGS -Wl,--no-as-needed \
+	-LDFLAGS "-Wl,--no-as-needed $(COMPAT_LIB)" \
 	+define+FSDB \
 	-debug_acc+all \
 	-kdb \
@@ -29,7 +33,7 @@ compile:
 	$(VCS) $(VCS_COMPILE_OPTS) -f $(SRC_FILES)
 
 simulate: compile
-	./simv $(VCS_RUN_OPTS)
+	$(RUN_ENV) ./simv $(VCS_RUN_OPTS)
 
 view:
 	$(VERDI) -ssf wave.fsdb &

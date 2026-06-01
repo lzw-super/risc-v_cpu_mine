@@ -6,12 +6,15 @@
 module tb_pipeline_combined;
 
     reg clk;
-    reg reset;
+    reg reset; 
+    reg aluout ;
+    
 
     // Instantiate Pipeline CPU
     pipeline_cpu u_cpu (
         .clk(clk),
-        .reset(reset)
+        .reset(reset),
+        .aluout(aluout)
     );
 
     // Clock generation: 100MHz

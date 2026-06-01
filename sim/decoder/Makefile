@@ -9,12 +9,16 @@ VERDI   = verdi
 # 文件列表
 SRC_FILES = filelist.f
 
+COMPAT_DIR := $(shell cd .. && pwd)
+COMPAT_LIB = -L$(COMPAT_DIR) -lpthread_yield_compat
+RUN_ENV = LD_LIBRARY_PATH=$(COMPAT_DIR):$$LD_LIBRARY_PATH
+
 # 编译选项
 VCS_COMPILE_OPTS = \
 	-full64 \
 	-sverilog \
 	-timescale=1ns/1ps \
-	-LDFLAGS -Wl,--no-as-needed \
+	-LDFLAGS "-Wl,--no-as-needed $(COMPAT_LIB)" \
 	+define+FSDB \
 	-debug_acc+all \
 	-kdb \
@@ -36,7 +40,7 @@ compile:
 
 # 运行仿真（启用 FSDB）
 simulate: compile
-	./simv $(VCS_RUN_OPTS)
+	$(RUN_ENV) ./simv $(VCS_RUN_OPTS)
 
 # 启动 Verdi 查看波形
 view:
