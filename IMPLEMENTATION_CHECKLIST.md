@@ -56,7 +56,7 @@
 - [x] 新增 `syn/Makefile`，支持一条命令运行综合。
 - [x] 跑通 `make -C syn check`，确认 analyze/elaborate/link/check 可重复。
 - [x] 跑通 `make -C syn synth`，得到快速映射结果；2026-06-01 使用 `pipeline_cpu_fpga`、10 ns、quick compile 生成 mapped netlist 和 PPA 报告。
-- [ ] 跑通 `make -C syn ultra`，得到最终 PPA 报告。
+- [x] 跑通 `make -C syn ultra`，得到最终 PPA 报告。2026-06-02 core-only ultra 已完成（BTB=256/BHT=256 和 BTB=16/BHT=16 两种配置均跑通）。
 - [x] 检查 `reports/pipeline_cpu_fpga.check.rpt`，当前已无 latch、多驱动、组合环和端口方向冲突；剩余 lint 主要是未使用高位索引、monitor 直通和常量控制位。
 - [x] 检查 `reports/pipeline_cpu_fpga.constraints.rpt`；2026-06-01 DRC 闭环后 10 ns setup/hold 时序满足，报告显示 `This design has no violated constraints.`。
 - [x] 闭环 `reports/pipeline_cpu_fpga.constraints.rpt` 中的设计规则违例；2026-06-01 本轮 DRC 闭环后 max_transition/max_capacitance/max_fanout 违例均为 0。
@@ -145,6 +145,41 @@ PPA/DRC 对比：
 
 备注：constraints 已 clean；BHT reset 未改；standard-cell memory/predictor 原型面积仍偏大，后续可继续做 core-only 综合边界、SRAM macro 接入和 predictor 参数化。
 
+### Core-Only compile_ultra（BTB=256, BHT=256）
+
+综合配置：`TOP=pipeline_cpu_core`，`CLK_PERIOD_NS=10.0`，`COMPILE_MODE=ultra`，Nangate45。
+
+- 输出文件：`syn/outputs/pipeline_cpu_core_mapped.v`、`pipeline_cpu_core.ddc`、`pipeline_cpu_core.sdc`、`pipeline_cpu_core.sdf`。
+- 规模：56509 cells，42930 combinational，13566 sequential。
+- 面积：cell area 106729.573524；u_btb 占 81.1%（86577.68），u_regfile 占 8.7%（9302.02），u_bht 占 4.4%（4655.53）。
+- 时序：10 ns 约束下 critical path 0.72 ns，setup slack 4.24 ns，TNS 0，violating paths 0。
+- 功耗：total dynamic power 9.8427 mW，cell leakage power 1.8008 mW（低精度趋势估算）。
+- 约束：DRC clean，`This design has no violated constraints.`
+
+### Core-Only compile_ultra（BTB=16, BHT=16）
+
+综合配置：`TOP=pipeline_cpu_core`，`CLK_PERIOD_NS=10.0`，`COMPILE_MODE=ultra`，`BTB_ENTRIES=16 BHT_ENTRIES=16`，Nangate45。
+
+- 规模：11877 cells，9514 combinational，2350 sequential。
+- 面积：cell area 21747.096322；u_btb 占 27.2%（5915.84），u_regfile 占 42.8%（9302.02），u_bht 占 1.5%（319.47）。
+- 时序：critical path 0.72 ns，setup slack 4.24 ns，TNS 0，violating paths 0。
+- 功耗：total dynamic power 1.9284 mW，cell leakage power 365.88 uW（低精度趋势估算）。
+- 约束：DRC clean。
+
+### PPA 对比总表
+
+| 指标 | 初版 quick (fpga) | DRC 闭环 quick (fpga) | core ultra (256) | core ultra (16) |
+| --- | ---: | ---: | ---: | ---: |
+| max trans violations | 24610 | 0 | 0 | 0 |
+| max cap violations | 35 | 0 | 0 | 0 |
+| max fanout violations | 36 | 0 | 0 | 0 |
+| cell count | 122583 | 85251 | 56509 | 11877 |
+| cell area | 248272.70 | 169530.31 | 106729.57 | 21747.10 |
+| critical path | 6.32 ns | 6.23 ns | 0.72 ns | 0.72 ns |
+| setup slack | 3.63 ns | 3.73 ns | 4.24 ns | 4.24 ns |
+| dynamic power | 16.15 mW | 16.08 mW | 9.84 mW | 1.93 mW |
+| leakage power | 4.94 mW | 3.47 mW | 1.80 mW | 0.37 mW |
+
 ## 第一阶段实现路线与解决方案
 
 第一阶段不再只追求“DC 能跑完”，而是分成三个可验收层级：
@@ -153,7 +188,7 @@ PPA/DRC 对比：
 | --- | --- | --- | --- |
 | 1A: RTL 可综合性 | DC 能 analyze/elaborate/link/check，且无 latch、组合环、多驱动、端口方向冲突 | 已完成 | `make -C syn check` 通过，`check.rpt` 仅保留可解释 lint |
 | 1B: 标准单元快速映射 | 生成 mapped netlist、DDC、SDC、SDF 和初版 PPA | 已完成 | `make -C syn synth` 生成 `pipeline_cpu_fpga_mapped.v`，setup/hold 无违例 |
-| 1C: DRC/PPA 可交付基线 | max transition/cap/fanout 闭环，PPA 能作为后续优化基准 | 已完成（quick synth DRC clean） | `constraints.rpt` 无 all_violators，归档 DRC 闭环后 quick synth area/timing/power/qor |
+| 1C: DRC/PPA 可交付基线 | max transition/cap/fanout 闭环，PPA 能作为后续优化基准 | 已完成（quick synth DRC clean + core-only ultra 归档） | `constraints.rpt` 无 all_violators，归档 DRC 闭环后 quick synth 与 core-only ultra（256/16）area/timing/power/qor |
 
 初版 quick synth 说明架构本身能满足 10 ns setup/hold，但实现方式还不适合作为最终 PPA：`u_datamem` 占总面积约 53.0%，`u_btb` 占约 37.4%，两者合计超过 90%；最坏路径也落在 `u_ex_mem/alu_out_out_reg[0]` 到 `u_datamem/mem_mine/mem_reg[*][*]` 的 store 写内存路径。2026-06-01 本轮 DRC 已清零，但面积仍由 standard-cell 原型中的 `u_btb`（49.1%）和 `u_datamem`（37.4%）主导，后续 PPA 优化应继续处理 memory/predictor 结构，而不是盲目调高 DC effort。
 
@@ -212,14 +247,15 @@ PPA/DRC 对比：
 
 ### 第一阶段下一步清单
 
-- [ ] 新增综合友好的 data memory interface 顶层，默认 DC top 切到 core-only。
-- [ ] 保留现有 `pipeline_cpu_fpga`/`datamem` 作为仿真和 FPGA wrapper，不破坏 baseline(A) 回归。
+- [x] 新增综合友好的 data memory interface 顶层，默认 DC top 切到 core-only。
+- [x] 保留现有 `pipeline_cpu_fpga`/`datamem` 作为仿真和 FPGA wrapper，不破坏 baseline(A) 回归。
 - [x] 将 `datamem` 改为 word-array + byte-enable，作为不接 macro 时的备选实现。
-- [ ] 参数化 BTB/BHT 表项数，新增 `SYNTH_SMALL_PREDICTOR` 或 Makefile 变量控制综合配置。
+- [x] 参数化 BTB/BHT 表项数，新增 `SYNTH_SMALL_PREDICTOR` 或 Makefile 变量控制综合配置。
 - [x] 去掉 BTB 大数组全量异步 reset，只 reset valid；BHT reset 本轮未改，因 quick synth DRC 已 clean 暂不处理。
 - [x] 调整 DC reset 约束，允许 reset 网络缓冲或显式插 buffer tree。
 - [x] 每完成一项结构优化后运行 `baseline_a`、`all_tests`、`make -C syn check`、`make -C syn synth`。
 - [x] 以 `constraints.rpt` 中 max transition/cap/fanout 违例归零作为 1C 完成标准。
+- [x] 跑通 `make -C syn ultra`，得到最终 PPA 报告。
 
 ## Baseline(A) 验证记录
 

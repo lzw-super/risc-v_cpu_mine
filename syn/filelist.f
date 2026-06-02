@@ -15,4 +15,6 @@
 ../src/hazard_unit.v
 ../src/btb.v
 ../src/bht.v
+../src/pipeline_cpu.v
+../src/pipeline_cpu_core.v
 ../src/pipeline_cpu_fpga.v
