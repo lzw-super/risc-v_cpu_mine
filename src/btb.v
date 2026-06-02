@@ -65,11 +65,9 @@ module btb #(
     integer i;
     always @(posedge clk or posedge reset) begin
         if (reset) begin
-            // 复位时清除所有条目
+            // 复位时只清除有效位，降低复位扇出
             for (i = 0; i < BTB_ENTRIES; i = i + 1) begin
                 valid[i] <= 1'b0;
-                tag_array[i] <= {TAG_BITS{1'b0}};
-                target_array[i] <= 32'h0;
             end
         end
         else if (update_enable && (branch_taken || is_jump)) begin

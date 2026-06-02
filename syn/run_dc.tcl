@@ -93,7 +93,9 @@ if {[sizeof_collection [get_ports clk]] > 0} {
 
 if {[sizeof_collection [get_ports reset]] > 0} {
     set_false_path -from [get_ports reset]
-    set_dont_touch_network [get_ports reset]
+    if {[info exists env(DONT_TOUCH_RESET)] && $env(DONT_TOUCH_RESET) eq "1"} {
+        set_dont_touch_network [get_ports reset]
+    }
 }
 
 set_max_fanout 16 [current_design]
@@ -116,6 +118,7 @@ report_power > [file join $REPORT_DIR ${DESIGN_NAME}.power.rpt]
 report_resources -hierarchy > [file join $REPORT_DIR ${DESIGN_NAME}.resources.rpt]
 report_reference -hierarchy > [file join $REPORT_DIR ${DESIGN_NAME}.reference.rpt]
 report_constraint -all_violators > [file join $REPORT_DIR ${DESIGN_NAME}.constraints.rpt]
+report_net -connections -verbose [all_high_fanout -nets -threshold 16] > [file join $REPORT_DIR ${DESIGN_NAME}.high_fanout.rpt]
 
 if {$COMPILE_MODE eq "check"} {
     set VERILOG_OUT [file join $OUTPUT_DIR ${DESIGN_NAME}_elab.v]

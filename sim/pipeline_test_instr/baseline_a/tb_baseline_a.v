@@ -48,6 +48,16 @@ module tb_baseline_a;
         repeat (5) @(posedge clk);
         reset = 0;
 
+        u_cpu.u_datamem.mem_mine.mem_word[8'h20] = 32'ha55ac33c;
+        if (u_cpu.u_datamem.mem_mine.mem_word[8'h20] === 32'ha55ac33c) begin
+            $display("[PASS] datamem word-array sanity: mem_word[8'h20] readback matched");
+        end
+        else begin
+            $display("[FAIL] datamem word-array sanity: mem_word[8'h20] = %h, expected a55ac33c",
+                     u_cpu.u_datamem.mem_mine.mem_word[8'h20]);
+            error_count = error_count + 1;
+        end
+
         repeat (90) begin
             @(posedge clk);
             cycle_count = cycle_count + 1;
