@@ -30,6 +30,18 @@ if {[info exists env(NANGATE45_HOME)]} {
     set NANGATE45_HOME /home/synopsys/syn/nangate45
 }
 
+if {[info exists env(BTB_ENTRIES)]} {
+    set BTB_ENTRIES $env(BTB_ENTRIES)
+} else {
+    set BTB_ENTRIES 256
+}
+
+if {[info exists env(BHT_ENTRIES)]} {
+    set BHT_ENTRIES $env(BHT_ENTRIES)
+} else {
+    set BHT_ENTRIES 256
+}
+
 if {[info exists env(DC_HOME)]} {
     set DC_HOME_LOCAL $env(DC_HOME)
 } else {
@@ -75,8 +87,37 @@ while {[gets $fp line] >= 0} {
 close $fp
 
 analyze -format verilog $rtl_files
-elaborate $DESIGN_NAME
-current_design $DESIGN_NAME
+
+if {$DESIGN_NAME eq "pipeline_cpu_core"} {
+    if {$BTB_ENTRIES <= 16} {
+        set BTB_INDEX_BITS_VAL 4
+        set TAG_BITS_VAL 16
+    } elseif {$BTB_ENTRIES <= 64} {
+        set BTB_INDEX_BITS_VAL 6
+        set TAG_BITS_VAL 14
+    } else {
+        set BTB_INDEX_BITS_VAL 8
+        set TAG_BITS_VAL 12
+    }
+    if {$BHT_ENTRIES <= 16} {
+        set BHT_INDEX_BITS_VAL 4
+    } elseif {$BHT_ENTRIES <= 64} {
+        set BHT_INDEX_BITS_VAL 6
+    } else {
+        set BHT_INDEX_BITS_VAL 8
+    }
+    set params "$BTB_ENTRIES,$BTB_INDEX_BITS_VAL,$TAG_BITS_VAL,$BHT_ENTRIES,$BHT_INDEX_BITS_VAL"
+    elaborate $DESIGN_NAME -parameters $params
+} else {
+    elaborate $DESIGN_NAME
+}
+
+set found_designs [get_designs -quiet $DESIGN_NAME]
+if {[sizeof_collection $found_designs] > 0} {
+    current_design $DESIGN_NAME
+} else {
+    current_design
+}
 link
 uniquify
 
@@ -93,7 +134,9 @@ if {[sizeof_collection [get_ports clk]] > 0} {
 
 if {[sizeof_collection [get_ports reset]] > 0} {
     set_false_path -from [get_ports reset]
-    set_dont_touch_network [get_ports reset]
+    if {[info exists env(DONT_TOUCH_RESET)] && $env(DONT_TOUCH_RESET) eq "1"} {
+        set_dont_touch_network [get_ports reset]
+    }
 }
 
 set_max_fanout 16 [current_design]
@@ -116,6 +159,7 @@ report_power > [file join $REPORT_DIR ${DESIGN_NAME}.power.rpt]
 report_resources -hierarchy > [file join $REPORT_DIR ${DESIGN_NAME}.resources.rpt]
 report_reference -hierarchy > [file join $REPORT_DIR ${DESIGN_NAME}.reference.rpt]
 report_constraint -all_violators > [file join $REPORT_DIR ${DESIGN_NAME}.constraints.rpt]
+report_net -connections -verbose [all_high_fanout -nets -threshold 16] > [file join $REPORT_DIR ${DESIGN_NAME}.high_fanout.rpt]
 
 if {$COMPILE_MODE eq "check"} {
     set VERILOG_OUT [file join $OUTPUT_DIR ${DESIGN_NAME}_elab.v]
@@ -136,6 +180,8 @@ if {$COMPILE_MODE ne "check"} {
 puts "Synthesis finished for $DESIGN_NAME."
 puts "Clock period: $CLK_PERIOD_NS ns"
 puts "Compile mode: $COMPILE_MODE"
+puts "BTB entries: $BTB_ENTRIES"
+puts "BHT entries: $BHT_ENTRIES"
 puts "Reports: $REPORT_DIR"
 puts "Outputs: $OUTPUT_DIR"
 
