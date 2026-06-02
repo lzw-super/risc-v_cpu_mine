@@ -101,7 +101,10 @@ module pipeline_cpu_core #(
     // ALU inputs
     wire [31:0]   ex_alu_data1;
     wire [31:0]   ex_alu_data2;
-    wire [31:0]   ex_alu_out;
+    wire [31:0]   ex_alu_result;  // ALU原始输出
+    wire [31:0]   ex_mdu_out;     // MDU输出
+    wire          ex_is_m_type;   // 当前EX阶段是否为M-type指令
+    wire [31:0]   ex_alu_out;     // ALU/MDU结果（MUX后）
     // Branch result
     wire          ex_branch_taken;
     wire [31:0]   ex_branch_target;
@@ -384,8 +387,20 @@ module pipeline_cpu_core #(
         .data1(ex_alu_data1),
         .data2(ex_alu_data2),
         .op(ex_aluop),
-        .res(ex_alu_out)
+        .res(ex_alu_result)
     );
+
+    // MDU (Multiply/Divide Unit)
+    mul_div u_mul_div (
+        .data1(ex_alu_data1),
+        .data2(ex_alu_data2),
+        .op(ex_aluop),
+        .res(ex_mdu_out)
+    );
+
+    // ALU/MDU 结果选择
+    assign ex_is_m_type = (ex_aluop >= 8'h0b) && (ex_aluop <= 8'h12);
+    assign ex_alu_out = ex_is_m_type ? ex_mdu_out : ex_alu_result;
 
     // Branch Module
     branch u_branch (

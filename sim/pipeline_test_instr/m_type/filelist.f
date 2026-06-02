@@ -1,4 +1,5 @@
 ../../../src/pipeline_cpu.v
+../../../src/mul_div.v
 ../../../src/if_id_reg.v
 ../../../src/id_ex_reg.v
 ../../../src/ex_mem_reg.v
@@ -10,10 +11,9 @@
 ../../../src/pc.v
 ../../../src/regfile.v
 ../../../src/alu.v
-../../../src/mul_div.v
 ../../../src/datamem.v
 pipeline_imem.v
 ../../../src/decoder.v
 ../../../src/branch.v
 ../../../src/mul4to1_32.v
-tb_load_store.v
+tb_m_type.v

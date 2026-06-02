@@ -283,15 +283,15 @@ make -C sim/pipeline_test_instr all_tests
 
 目标：满足赛题指令集硬要求。
 
-- [ ] 扩展 `decoder`，识别 opcode `0110011` 且 funct7=`0000001` 的 RV32M 指令。
-- [ ] 扩展 ALU opcode 编码，避免与 RV32I 操作冲突。
-- [ ] 实现乘法：`MUL`、`MULH`、`MULHSU`、`MULHU`。
-- [ ] 实现除法/取余：`DIV`、`DIVU`、`REM`、`REMU`。
-- [ ] 明确除零和溢出行为，按 RISC-V spec 处理。
-- [ ] 选择执行策略：单周期组合乘除、迭代多周期 MDU、或乘法单周期/除法多周期。
-- [ ] 若采用多周期 MDU，增加 EX 阶段 busy/stall，并确认 forwarding/load-use/flush 的优先级。
-- [ ] 新增 `sim/pipeline_test_instr/m_type/`，逐条测试 RV32M。
-- [ ] 将 RV32M 合入 `all_tests`。
+- [x] 扩展 `decoder`，识别 opcode `0110011` 且 funct7=`0000001` 的 RV32M 指令。
+- [x] 扩展 ALU opcode 编码，避免与 RV32I 操作冲突。aluop 0x0b-0x12 对应 8 条 M-type 指令。
+- [x] 实现乘法：`MUL`、`MULH`、`MULHSU`、`MULHU`。
+- [x] 实现除法/取余：`DIV`、`DIVU`、`REM`、`REMU`。
+- [x] 明确除零和溢出行为，按 RISC-V spec 处理。DIV/DIVU 除零→全1；REM/REMU 除零→被除数；0x80000000/-1 溢出→自身/0。
+- [x] 选择执行策略：单周期组合乘除。当前 core-only ultra slack 4.24ns，MDU 组合延迟预计 3-5ns，10ns 约束下可行。
+- [x] 采用单周期 MDU，无需 EX 阶段 busy/stall。MDU 结果复用 ex_alu_out 路径，forwarding/hazard 逻辑零修改。
+- [x] 新增 `sim/pipeline_test_instr/m_type/`，逐条测试 RV32M（21 项全 PASS，含除零测试）。
+- [x] 将 RV32V 合入 `all_tests`。全量回归（r_type/baseline_a/btb_bht/jump_predict/all_tests）均通过。
 
 ## 第三阶段：性能量化与 bonus 证明
 

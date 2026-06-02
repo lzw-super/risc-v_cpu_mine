@@ -10,6 +10,7 @@
 ../../../src/pc.v
 ../../../src/regfile.v
 ../../../src/alu.v
+../../../src/mul_div.v
 ../../../src/datamem.v
 pipeline_imem.v
 ../../../src/decoder.v

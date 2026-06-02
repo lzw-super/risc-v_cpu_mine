@@ -43,6 +43,14 @@ module decoder (
     // 0x08: sra
     // 0x09: or
     // 0x0a: and
+    // 0x0b: mul
+    // 0x0c: mulh
+    // 0x0d: mulhsu
+    // 0x0e: mulhu
+    // 0x0f: div
+    // 0x10: divu
+    // 0x11: rem
+    // 0x12: remu
 
     localparam  _enable     = 1'b1;
     localparam  _disable    = 1'b0;
@@ -78,31 +86,35 @@ module decoder (
                                 aluop = 8'h1;
                             7'b0100000:     // sub
                                 aluop = 8'h2;
-                            default: 
+                            7'b0000001:     // MUL
+                                aluop = 8'h0b;
+                            default:
                                 aluop = 8'h0;
                         endcase
-                    3'b001:                 // sll
-                        aluop = 8'h3;
-                    3'b010:                 // slt
-                        aluop = 8'h4;   
-                    3'b011:                 // sltu
-                        aluop = 8'h5;
-                    3'b100:                 // xor
-                        aluop = 8'h6;
-                    3'b101:                 // srl / sra
-                        case(instr[31:25])  // Func7
+                    3'b001:                 // sll / MULH
+                        aluop = (instr[31:25] == 7'b0000001) ? 8'h0c : 8'h3;
+                    3'b010:                 // slt / MULHSU
+                        aluop = (instr[31:25] == 7'b0000001) ? 8'h0d : 8'h4;
+                    3'b011:                 // sltu / MULHU
+                        aluop = (instr[31:25] == 7'b0000001) ? 8'h0e : 8'h5;
+                    3'b100:                 // xor / DIV
+                        aluop = (instr[31:25] == 7'b0000001) ? 8'h0f : 8'h6;
+                    3'b101:                 // srl / sra / DIVU
+                        case(instr[31:25])
                             7'b0000000:     // srl
                                 aluop = 8'h7;
                             7'b0100000:     // sra
                                 aluop = 8'h8;
-                            default: 
+                            7'b0000001:     // DIVU
+                                aluop = 8'h10;
+                            default:
                                 aluop = 8'h0;
                         endcase
-                    3'b110:                 // or
-                        aluop = 8'h9;
-                    3'b111:                 // and
-                        aluop = 8'ha;
-                    default:  
+                    3'b110:                 // or / REM
+                        aluop = (instr[31:25] == 7'b0000001) ? 8'h11 : 8'h9;
+                    3'b111:                 // and / REMU
+                        aluop = (instr[31:25] == 7'b0000001) ? 8'h12 : 8'ha;
+                    default:
                         aluop = 8'h0;
                 endcase
             end

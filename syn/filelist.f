@@ -4,6 +4,7 @@
 ../src/pc.v
 ../src/regfile.v
 ../src/alu.v
+../src/mul_div.v
 ../src/decoder.v
 ../src/branch.v
 ../src/datamem.v
