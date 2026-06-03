@@ -31,7 +31,7 @@
 | 赛题要求 | 当前状态 | 后续动作 |
 | --- | --- | --- |
 | RV32I 基础整数指令集全部指令 | 基本完成，覆盖 R/I/load/store/branch/jump/U 型 | 保留逐条指令回归，补充异常边界值和随机组合程序 |
-| RV32M 乘除法扩展全部指令 | 未实现 | 增加 `MUL/MULH/MULHSU/MULHU/DIV/DIVU/REM/REMU` 解码、执行单元、流水线 stall/前递策略和测试 |
+| RV32M 乘除法扩展全部指令 | 已完成 | 保留 `m_type` 专项回归，后续并入应用级复杂程序验证 |
 | A: 经典 5 级流水线 | 已完成 IF/ID/EX/MEM/WB，并通过 `baseline_a` 与 `all_tests` 回归观测 | 归档关键波形截图作为提交材料 |
 | A: forwarding | 已完成，并通过 `baseline_a` 覆盖 rd=x0、EX/MEM 优先级、MEM/WB 回退 | 后续可继续扩展随机依赖序列 |
 | A: 数据冒险和控制冒险处理 | 已完成基础处理，并通过 `baseline_a` 覆盖 load 后接 ALU/branch/store/JALR 与错误路径 flush | 保留交叉用例回归 |
@@ -288,10 +288,12 @@ make -C sim/pipeline_test_instr all_tests
 - [x] 实现乘法：`MUL`、`MULH`、`MULHSU`、`MULHU`。
 - [x] 实现除法/取余：`DIV`、`DIVU`、`REM`、`REMU`。
 - [x] 明确除零和溢出行为，按 RISC-V spec 处理。DIV/DIVU 除零→全1；REM/REMU 除零→被除数；0x80000000/-1 溢出→自身/0。
-- [x] 选择执行策略：单周期组合乘除。当前 core-only ultra slack 4.24ns，MDU 组合延迟预计 3-5ns，10ns 约束下可行。
-- [x] 采用单周期 MDU，无需 EX 阶段 busy/stall。MDU 结果复用 ex_alu_out 路径，forwarding/hazard 逻辑零修改。
-- [x] 新增 `sim/pipeline_test_instr/m_type/`，逐条测试 RV32M（21 项全 PASS，含除零测试）。
-- [x] 将 RV32V 合入 `all_tests`。全量回归（r_type/baseline_a/btb_bht/jump_predict/all_tests）均通过。
+- [x] 选择执行策略：迭代式多周期 MDU，避免 DC 将组合 `/`、`%` 和宽乘法映射成超大 DesignWare 组合除法器。
+- [x] 新增 MDU `start/busy/done` 握手；M-type 指令在 EX 阶段执行期间 hold ID/EX、stall PC/IF_ID，并向 EX/MEM 插入 bubble，完成后复用 `ex_alu_out` 写回和 forwarding 路径。
+- [x] 新增 `sim/pipeline_test_instr/m_type/`，逐条测试 RV32M（28 项全 PASS，含除零、溢出和大数乘法边界测试）。
+- [x] 将 RV32M 合入 `all_tests` 依赖文件列表，确保现有流水线测试可链接 `mul_div`。
+- [x] 迭代式 MDU 版本已通过 `make -C sim/pipeline_test_instr m_type`、`baseline_a`、`r_type`、`all_tests`、`btb_bht`、`jump_predict`，以及 `make -C syn check`、`make -C syn synth`。
+- [x] 记录 RV32M 后 core-only quick synth PPA：52945 cells，cell area 110936.895427，critical path 6.31 ns，setup slack 3.66 ns，dynamic power 10.6420 mW，leakage power 2.3379 mW，constraints clean。
 
 ## 第三阶段：性能量化与 bonus 证明
 
@@ -333,8 +335,8 @@ make -C sim/pipeline_test_instr all_tests
 
 ## 当前风险
 
-- RV32M 尚未实现，这是赛题硬性要求，优先级高于 bonus。
-- 当前综合顶层选择 `pipeline_cpu_fpga`，它更适合作为 core 综合边界；仿真顶层 `pipeline_cpu` 内含 `$readmemh` 指令存储器，更适合仿真。
+- RV32M 已实现并采用迭代式 MDU；后续风险主要是多周期 EX stall 与更多复杂程序、随机依赖序列的交叉覆盖仍需扩展。
+- 当前综合默认可选择 core-only 边界；仿真顶层 `pipeline_cpu` 内含 `$readmemh` 指令存储器，更适合仿真。
 - `datamem`、BTB、BHT 当前会在 DC 中综合为寄存器阵列/多路选择逻辑，面积和时序可能偏大；后续若追求 PPA，应考虑 SRAM macro 或更小预测表。
 - `make -C syn ultra` 可能在映射 `datamem` 大寄存器阵列时耗时较长；若只做 RTL 可综合性检查，优先用 `make -C syn check`。
 - `make -C syn check` 会生成 elaborated netlist，不等同于最终 mapped netlist；最终 PPA 仍需跑 `make -C syn synth` 或 `make -C syn ultra`。

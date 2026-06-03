@@ -53,8 +53,8 @@ module tb_m_type;
         reset = 0;
         $display("[复位完成]");
 
-        // 执行足够周期（22条指令 + 3 NOP + 流水线延迟）
-        repeat(80) @(posedge clk);
+        // 迭代式 MDU 每条乘除法约 33 个周期
+        repeat(950) @(posedge clk);
 
         $display("========================================");
         $display("验证结果:");
@@ -100,6 +100,15 @@ module tb_m_type;
         check("x19 (ADDI 42)",        u_cpu.u_regfile.regfile[19], 32'h2A);
         check("x20 (DIV 42/0)",       u_cpu.u_regfile.regfile[20], 32'hFFFFFFFF);
         check("x21 (REMU 42%%0)",     u_cpu.u_regfile.regfile[21], 32'h2A);
+
+        // 边界
+        check("x22 (LUI 0x80000)",    u_cpu.u_regfile.regfile[22], 32'h80000000);
+        check("x23 (DIV overflow)",   u_cpu.u_regfile.regfile[23], 32'h80000000);
+        check("x24 (REM overflow)",   u_cpu.u_regfile.regfile[24], 32'h0);
+        check("x25 (MULHU max*max)",  u_cpu.u_regfile.regfile[25], 32'hFFFFFFFE);
+        check("x26 (ADDI -7)",        u_cpu.u_regfile.regfile[26], 32'hFFFFFFF9);
+        check("x27 (REM -7%%3)",      u_cpu.u_regfile.regfile[27], 32'hFFFFFFFF);
+        check("x28 (MULH min*-1)",    u_cpu.u_regfile.regfile[28], 32'h0);
 
         $display("========================================");
         $display("总计: %0d PASS, %0d FAIL", pass_count, fail_count);

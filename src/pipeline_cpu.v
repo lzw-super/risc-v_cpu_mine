@@ -83,6 +83,10 @@ module pipeline_cpu (
     wire [31:0]   ex_alu_result;  // ALU原始输出
     wire [31:0]   ex_mdu_out;     // MDU输出
     wire          ex_is_m_type;   // 当前EX阶段是否为M-type指令
+    wire          ex_mdu_start;
+    wire          ex_mdu_busy;
+    wire          ex_mdu_done;
+    wire          ex_mdu_stall;
     wire [31:0]   ex_alu_out;     // ALU/MDU结果（MUX后）
     // Branch result
     wire          ex_branch_taken;
@@ -190,7 +194,7 @@ module pipeline_cpu (
     pc u_pc (
         .clk(clk),
         .reset(reset),
-        .stall(stall_pc),
+        .stall(stall_pc || ex_mdu_stall),
         .predicted_pc(if_predicted_pc),
         .predicted_valid(if_predicted_valid),
         .redirect_pc(redirect_pc),
@@ -210,7 +214,7 @@ module pipeline_cpu (
     if_id_reg u_if_id (
         .clk(clk),
         .reset(reset),
-        .stall(stall_if_id),
+        .stall(stall_if_id || ex_mdu_stall),
         .flush(if_id_flush),
         .pc_in(if_pc),
         .instr_in(if_instr),
@@ -270,6 +274,7 @@ module pipeline_cpu (
         .clk(clk),
         .reset(reset),
         .stall(flush_id_ex),
+        .hold(ex_mdu_stall),
         .flush(id_ex_flush),
         // Control signals
         .re1_in(id_re1),
@@ -367,15 +372,23 @@ module pipeline_cpu (
     );
 
     // MDU (Multiply/Divide Unit)
+    assign ex_is_m_type = (ex_aluop >= 8'h0b) && (ex_aluop <= 8'h12);
+    assign ex_mdu_start = ex_is_m_type && !ex_mdu_busy && !ex_mdu_done;
+    assign ex_mdu_stall = ex_is_m_type && !ex_mdu_done;
+
     mul_div u_mul_div (
+        .clk(clk),
+        .reset(reset),
+        .start(ex_mdu_start),
         .data1(ex_alu_data1),
         .data2(ex_alu_data2),
         .op(ex_aluop),
-        .res(ex_mdu_out)
+        .res(ex_mdu_out),
+        .busy(ex_mdu_busy),
+        .done(ex_mdu_done)
     );
 
     // ALU/MDU 结果选择
-    assign ex_is_m_type = (ex_aluop >= 8'h0b) && (ex_aluop <= 8'h12);
     assign ex_alu_out = ex_is_m_type ? ex_mdu_out : ex_alu_result;
 
     // Branch Module
@@ -399,7 +412,7 @@ module pipeline_cpu (
     ex_mem_reg u_ex_mem (
         .clk(clk),
         .reset(reset),
-        .flush(1'b0),
+        .flush(ex_mdu_stall),
         .we_in(ex_we),
         .dmop_in(ex_dmop),
         .mwe_in(ex_mwe),

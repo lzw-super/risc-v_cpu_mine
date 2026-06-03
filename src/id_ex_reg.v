@@ -6,6 +6,7 @@ module id_ex_reg (
     input           clk,
     input           reset,
     input           stall,      // 暂停信号（Load-Use冒险）
+    input           hold,       // 保持当前EX指令（MDU多周期执行）
     input           flush,      // 清空信号
 
     // 来自ID阶段的控制信号
@@ -110,8 +111,8 @@ module id_ex_reg (
             rd_addr_out   <= 5'b0;
             instr_out     <= 32'h00000013;  // NOP
         end
-        else if (flush || stall) begin
-            // flush或stall时插入NOP（清空控制信号）
+        else if (flush) begin
+            // flush时插入NOP（清空控制信号）
             re1_out       <= 1'b0;
             re2_out       <= 1'b0;
             we_out        <= 1'b0;
@@ -131,18 +132,64 @@ module id_ex_reg (
             btb_hit_out <= 1'b0;
             is_branch_out <= 1'b0;
             is_jump_out   <= 1'b0;        // 跳转指令标志清空
-            // 数据保持不变或清零
-            if (flush) begin
-                pc_out        <= 32'h0;
-                pc_next_out   <= 32'h0;   // PC+4清空
-                rs1_val_out   <= 32'h0;
-                rs2_val_out   <= 32'h0;
-                imm_out       <= 32'h0;
-                predict_target_out <= 32'h0;
-                rs1_addr_out  <= 5'b0;
-                rs2_addr_out  <= 5'b0;
-                rd_addr_out   <= 5'b0;
-            end
+            pc_out        <= 32'h0;
+            pc_next_out   <= 32'h0;
+            rs1_val_out   <= 32'h0;
+            rs2_val_out   <= 32'h0;
+            imm_out       <= 32'h0;
+            predict_target_out <= 32'h0;
+            rs1_addr_out  <= 5'b0;
+            rs2_addr_out  <= 5'b0;
+            rd_addr_out   <= 5'b0;
+        end
+        else if (hold) begin
+            re1_out       <= re1_out;
+            re2_out       <= re2_out;
+            we_out        <= we_out;
+            imme_out      <= imme_out;
+            pce_out       <= pce_out;
+            jmpe_out      <= jmpe_out;
+            be_out        <= be_out;
+            bop_out       <= bop_out;
+            alu_op_out    <= alu_op_out;
+            dmop_out      <= dmop_out;
+            mwe_out       <= mwe_out;
+            mem_read_out  <= mem_read_out;
+            wb_sel_out    <= wb_sel_out;
+            predict_taken_out <= predict_taken_out;
+            predict_target_out <= predict_target_out;
+            btb_hit_out <= btb_hit_out;
+            is_branch_out <= is_branch_out;
+            is_jump_out   <= is_jump_out;
+            pc_out        <= pc_out;
+            pc_next_out   <= pc_next_out;
+            rs1_val_out   <= rs1_val_out;
+            rs2_val_out   <= rs2_val_out;
+            imm_out       <= imm_out;
+            rs1_addr_out  <= rs1_addr_out;
+            rs2_addr_out  <= rs2_addr_out;
+            rd_addr_out   <= rd_addr_out;
+            instr_out     <= instr_out;
+        end
+        else if (stall) begin
+            re1_out       <= 1'b0;
+            re2_out       <= 1'b0;
+            we_out        <= 1'b0;
+            imme_out      <= 1'b0;
+            pce_out       <= 1'b0;
+            jmpe_out      <= 1'b0;
+            be_out        <= 1'b0;
+            bop_out       <= 3'b0;
+            alu_op_out    <= 8'b0;
+            dmop_out      <= 3'b0;
+            mwe_out       <= 1'b0;
+            mem_read_out  <= 1'b0;
+            wb_sel_out    <= 2'b0;
+            instr_out     <= 32'h00000013;
+            predict_taken_out <= 1'b0;
+            btb_hit_out <= 1'b0;
+            is_branch_out <= 1'b0;
+            is_jump_out   <= 1'b0;
         end
         else begin
             // 正常更新
