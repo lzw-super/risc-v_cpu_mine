@@ -1,7 +1,7 @@
 # Design Compiler synthesis script for the RISC-V pipeline CPU.
 #
 # Default target:
-#   TOP=pipeline_cpu_fpga CLK_PERIOD_NS=10.0 dc_shell -f run_dc.tcl
+#   TOP=pipeline_cpu_core CLK_PERIOD_NS=10.0 BTB_ENTRIES=16 BHT_ENTRIES=16 dc_shell -f run_dc.tcl
 
 set SCRIPT_DIR [file normalize [file dirname [info script]]]
 set REPO_ROOT  [file normalize [file join $SCRIPT_DIR ..]]
@@ -9,7 +9,7 @@ set REPO_ROOT  [file normalize [file join $SCRIPT_DIR ..]]
 if {[info exists env(TOP)]} {
     set DESIGN_NAME $env(TOP)
 } else {
-    set DESIGN_NAME pipeline_cpu_fpga
+    set DESIGN_NAME pipeline_cpu_core
 }
 
 if {[info exists env(CLK_PERIOD_NS)]} {
@@ -33,13 +33,13 @@ if {[info exists env(NANGATE45_HOME)]} {
 if {[info exists env(BTB_ENTRIES)]} {
     set BTB_ENTRIES $env(BTB_ENTRIES)
 } else {
-    set BTB_ENTRIES 256
+    set BTB_ENTRIES 16
 }
 
 if {[info exists env(BHT_ENTRIES)]} {
     set BHT_ENTRIES $env(BHT_ENTRIES)
 } else {
-    set BHT_ENTRIES 256
+    set BHT_ENTRIES 16
 }
 
 if {[info exists env(DC_HOME)]} {

@@ -9,8 +9,8 @@
 // 但BHT仍会更新状态以保持一致性
 
 module bht #(
-    parameter BHT_ENTRIES    = 256,      // BHT表大小
-    parameter BHT_INDEX_BITS = 8         // 索引位数：log2(256) = 8
+    parameter BHT_ENTRIES    = 16,       // BHT表大小
+    parameter BHT_INDEX_BITS = 4         // 索引位数：log2(16) = 4
 )(
     input           clk,
     input           reset,

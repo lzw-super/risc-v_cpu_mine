@@ -4,8 +4,8 @@ DC ?= dc_shell
 TOP ?= pipeline_cpu_core
 CLK_PERIOD_NS ?= 10.0
 COMPILE_MODE ?= quick
-BTB_ENTRIES ?= 256
-BHT_ENTRIES ?= 256
+BTB_ENTRIES ?= 16
+BHT_ENTRIES ?= 16
 
 LOG = dc_$(TOP).log
 

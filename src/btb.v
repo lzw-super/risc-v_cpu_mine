@@ -7,15 +7,15 @@
 //   - J-Type跳转 (JAL) - 目标地址固定，可完美预测
 //   - I-Type跳转 (JALR) - 间接跳转，缓存最近目标地址
 //
-// 结构：
-//   - 256条目，每个条目包含：valid位、tag(12位)、target地址(32位)
-//   - 索引：PC[9:2]（跳过低2位字节对齐）
+// Baseline结构：
+//   - 16条目，每个条目包含：valid位、tag(16位)、target地址(32位)
+//   - 索引：PC[5:2]（跳过低2位字节对齐）
 //   - 标签：用于区分同索引的不同分支指令
 
 module btb #(
-    parameter BTB_ENTRIES    = 256,      // BTB表大小
-    parameter BTB_INDEX_BITS = 8,        // 索引位数：log2(256) = 8
-    parameter TAG_BITS       = 12        // 标签位数
+    parameter BTB_ENTRIES    = 16,       // BTB表大小
+    parameter BTB_INDEX_BITS = 4,        // 索引位数：log2(16) = 4
+    parameter TAG_BITS       = 16        // 标签位数
 )(
     input           clk,
     input           reset,

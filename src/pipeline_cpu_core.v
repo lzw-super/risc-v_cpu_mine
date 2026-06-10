@@ -7,11 +7,11 @@
 // ==============================
 
 module pipeline_cpu_core #(
-    parameter BTB_ENTRIES    = 256,
-    parameter BTB_INDEX_BITS = 8,
-    parameter TAG_BITS       = 12,
-    parameter BHT_ENTRIES    = 256,
-    parameter BHT_INDEX_BITS = 8
+    parameter BTB_ENTRIES    = 16,
+    parameter BTB_INDEX_BITS = 4,
+    parameter TAG_BITS       = 16,
+    parameter BHT_ENTRIES    = 16,
+    parameter BHT_INDEX_BITS = 4
 )(
     input           clk,
     input           reset,
@@ -218,7 +218,9 @@ module pipeline_cpu_core #(
     assign redirect_en = ex_mispredict || (ex_jmpe && !ex_btb_hit);
     assign redirect_pc = ex_mispredict ? ex_correct_target : ex_branch_target;
 
-    pc u_pc (
+    pc #(
+        .REGISTER_NEXT_PC(0)
+    ) u_pc (
         .clk(clk),
         .reset(reset),
         .stall(stall_pc || ex_mdu_stall),

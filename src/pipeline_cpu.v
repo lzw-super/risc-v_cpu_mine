@@ -191,7 +191,9 @@ module pipeline_cpu (
     assign redirect_en = ex_mispredict || (ex_jmpe && !ex_btb_hit);
     assign redirect_pc = ex_mispredict ? ex_correct_target : ex_branch_target;
 
-    pc u_pc (
+    pc #(
+        .REGISTER_NEXT_PC(0)
+    ) u_pc (
         .clk(clk),
         .reset(reset),
         .stall(stall_pc || ex_mdu_stall),
