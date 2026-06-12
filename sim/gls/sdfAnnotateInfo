@@ -1,0 +1,30 @@
+
+# ***************************** SDF Annotate *****************************
+#
+# Static entries from SDF files:
+#
+#  IOPATH              =                99546
+#  INTERCONNECT        =                41907
+#  SETUP               =                 5450
+#  HOLD                =                 7407
+#  RECOVERY            =                 1957
+#  TIMINGCHECK(ALL)    =                14814
+#
+#
+
+# Annotated entries in elaborated design:
+#
+#  IOPATH Delays       =                99546
+#  INTERCONNECT(MIPD)  =                41907
+#  Timing Checks       =                14814
+#
+#  Annotated instances =                15818
+#  Total instances     =                15857
+#
+
+# Static entries in elaborated design:
+#  IOPATH Delays       =                99546
+#  Timing Checks       =                22221
+#
+# ************************************************************************
+#
