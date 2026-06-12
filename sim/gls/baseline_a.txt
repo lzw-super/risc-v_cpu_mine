@@ -1,0 +1,49 @@
+Baseline(A) pipeline verification program
+
+Hex format: one byte per line, little-endian instruction order.
+
+PC    Instruction              Purpose
+0x00  addi x1, x0, 100         Base data memory address.
+0x04  addi x2, x0, 5           Source value for x0 forwarding test.
+0x08  addi x0, x2, 99          Attempts to write x0; must be ignored.
+0x0c  add x3, x0, x2           x3 must be 5, proving x0 was not forwarded as 104.
+0x10  addi x4, x0, 1           Producer for EX/MEM priority test.
+0x14  addi x4, x4, 2           Newer x4 value is 3.
+0x18  addi x5, x4, 4           Must use EX/MEM x4=3, so x5=7.
+0x1c  addi x6, x0, 8           Producer for MEM/WB fallback test.
+0x20  addi x31, x0, 0          Spacer.
+0x24  addi x7, x6, 9           Must use MEM/WB x6=8, so x7=17.
+0x28  addi x10, x0, 42         Store/load data value.
+0x2c  sw x10, 0(x1)            mem[100] = 42.
+0x30  lw x11, 0(x1)            Load value 42.
+0x34  addi x12, x11, 1         Load-use ALU result must be 43.
+0x38  lw x13, 0(x1)            Load value 42 for branch compare.
+0x3c  beq x13, x10, 0x44       Load-use branch must be taken.
+0x40  addi x14, x0, 1          Wrong path; must be flushed.
+0x44  addi x14, x0, 2          Correct branch target.
+0x48  lw x15, 0(x1)            Load value 42 for store data.
+0x4c  sw x15, 4(x1)            Store data depends on load.
+0x50  lw x16, 4(x1)            x16 must be 42.
+0x54  addi x21, x0, 104        JALR target address.
+0x58  sw x21, 8(x1)            mem[108] = 104.
+0x5c  lw x20, 8(x1)            Load JALR target.
+0x60  jalr x19, 0(x20)         Load-use JALR target dependency.
+0x64  addi x22, x0, 1          Wrong path; must be flushed.
+0x68  addi x22, x0, 2          Correct JALR target.
+0x6c  beq x0, x0, 0x74         Taken branch for wrong-path store suppression.
+0x70  sw x10, 12(x1)           Wrong path store; must not commit.
+0x74  lw x23, 12(x1)           x23 must remain 0.
+
+Expected final values:
+x3  = 5
+x5  = 7
+x7  = 17
+x11 = 42
+x12 = 43
+x14 = 2
+x16 = 42
+x19 = 100
+x20 = 104
+x22 = 2
+x23 = 0
+stall_count >= 4

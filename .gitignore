@@ -4,8 +4,11 @@
 
 # VCS 编译仿真文件
 simv
+simv*
 simv.daidir/
+*.daidir/
 simv.csrc/
+*.csrc/
 csrc/
 vc_hdrs.h
 ucli.key
