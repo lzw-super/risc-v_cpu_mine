@@ -18,6 +18,10 @@ if {[info exists env(CLK_PERIOD_NS)]} {
     set CLK_PERIOD_NS 10.0
 }
 
+set CLK_TRANSITION_NS  [expr {$CLK_PERIOD_NS * 0.05}]
+set CLK_UNCERTAINTY_NS [expr {$CLK_PERIOD_NS * 0.10}]
+set IO_DELAY_NS        [expr {$CLK_PERIOD_NS * 0.10}]
+
 if {[info exists env(COMPILE_MODE)]} {
     set COMPILE_MODE $env(COMPILE_MODE)
 } else {
@@ -123,12 +127,14 @@ uniquify
 
 if {[sizeof_collection [get_ports clk]] > 0} {
     create_clock -name clk -period $CLK_PERIOD_NS [get_ports clk]
+    set_clock_transition $CLK_TRANSITION_NS [get_clocks clk]
+    set_clock_uncertainty -setup $CLK_UNCERTAINTY_NS [get_clocks clk]
     set non_clock_inputs [remove_from_collection [all_inputs] [get_ports clk]]
     if {[sizeof_collection $non_clock_inputs] > 0} {
-        set_input_delay 0.2 -clock clk $non_clock_inputs
+        set_input_delay $IO_DELAY_NS -clock clk $non_clock_inputs
     }
     if {[sizeof_collection [all_outputs]] > 0} {
-        set_output_delay 0.2 -clock clk [all_outputs]
+        set_output_delay $IO_DELAY_NS -clock clk [all_outputs]
     }
 }
 
@@ -154,7 +160,8 @@ if {$COMPILE_MODE eq "check"} {
 check_design > [file join $REPORT_DIR ${DESIGN_NAME}.check.rpt]
 report_qor > [file join $REPORT_DIR ${DESIGN_NAME}.qor.rpt]
 report_area -hierarchy > [file join $REPORT_DIR ${DESIGN_NAME}.area.rpt]
-report_timing -delay max -max_paths 20 -nworst 5 > [file join $REPORT_DIR ${DESIGN_NAME}.timing.rpt]
+report_timing -delay max -path full -input_pins -nets -transition_time -capacitance -max_paths 20 -nworst 5 > [file join $REPORT_DIR ${DESIGN_NAME}.timing.rpt]
+report_timing -delay max -path full -input_pins -nets -transition_time -capacitance -max_paths 1 -nworst 1 > [file join $REPORT_DIR ${DESIGN_NAME}.timing.setup.worst.rpt]
 report_power > [file join $REPORT_DIR ${DESIGN_NAME}.power.rpt]
 report_resources -hierarchy > [file join $REPORT_DIR ${DESIGN_NAME}.resources.rpt]
 report_reference -hierarchy > [file join $REPORT_DIR ${DESIGN_NAME}.reference.rpt]
@@ -179,6 +186,9 @@ if {$COMPILE_MODE ne "check"} {
 
 puts "Synthesis finished for $DESIGN_NAME."
 puts "Clock period: $CLK_PERIOD_NS ns"
+puts "Clock transition: $CLK_TRANSITION_NS ns"
+puts "Clock uncertainty: $CLK_UNCERTAINTY_NS ns"
+puts "Input/output delay: $IO_DELAY_NS ns"
 puts "Compile mode: $COMPILE_MODE"
 puts "BTB entries: $BTB_ENTRIES"
 puts "BHT entries: $BHT_ENTRIES"
