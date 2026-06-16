@@ -1,5 +1,6 @@
 ../../src/pipeline_cpu.v
 ../../src/if_id_reg.v
+../../src/id_decode_reg.v
 ../../src/id_ex_reg.v
 ../../src/ex_mem_reg.v
 ../../src/mem_wb_reg.v
@@ -10,6 +11,7 @@
 ../../src/pc.v
 ../../src/regfile.v
 ../../src/alu.v
+../../src/alu_fast.v
 ../../src/datamem.v
 ../../src/pipeline_imem.v
 ../../src/decoder.v

@@ -1,7 +1,7 @@
 /*
-写入使用时序，读出使用逻辑
-使用下降沿触发写入以确保单周期CPU的写回时序正确
-复位时将所有寄存器置零
+写入使用时序，读出使用组合逻辑。
+写口改为上升沿，并在读口加入WB bypass，保持同周期write-first语义，
+同时避免下降沿写入带来的半周期时序路径。
 */
 module regfile (
     input clk,
@@ -23,8 +23,8 @@ module regfile (
 );
     reg [31:0] regfile [31:0];
 
-    // 写入逻辑：下降沿触发，确保wb届udan年呢个在一个时钟周期内写入数据，否则需要进一步数据转发
-    always @(negedge clk , posedge reset) begin
+    // 写入逻辑
+    always @(posedge clk , posedge reset) begin
         if (reset) begin
             // 复位时将所有寄存器置零
             regfile[0]  <= 32'h0;
@@ -70,6 +70,9 @@ module regfile (
         if (!re1 || rs1 == 0) begin
             rs1_value = 32'h0;
         end
+        else if (we && (wd == rs1)) begin
+            rs1_value = wdata;
+        end
         else begin
             rs1_value = regfile[rs1];
         end
@@ -78,6 +81,9 @@ module regfile (
     always @(*) begin
         if (!re2 || rs2 == 0) begin
             rs2_value = 32'h0;
+        end
+        else if (we && (wd == rs2)) begin
+            rs2_value = wdata;
         end
         else begin
             rs2_value = regfile[rs2];

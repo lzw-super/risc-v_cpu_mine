@@ -34,7 +34,7 @@ module tb_btb_bht;
         reset = 0;
         $display("[复位完成] 开始执行...");
 
-        repeat(200) begin
+        repeat(350) begin
             @(posedge clk);
             cycle_count = cycle_count + 1;
 

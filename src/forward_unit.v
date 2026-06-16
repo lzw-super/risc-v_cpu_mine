@@ -1,7 +1,8 @@
 // ==============================
 // 转发单元 - 解决数据冒险
 // ==============================
-// 检测并选择转发数据源
+// EX0/EX1切分后不做EX1组合旁路回EX0，避免重建关键路径。
+// 紧邻producer由hazard_unit插入bubble；可见结果从EX/MEM或MEM/WB前递。
 
 module forward_unit (
     // 来自ID/EX寄存器
@@ -9,12 +10,12 @@ module forward_unit (
     input  [4:0]    rs2_addr,   // 当前指令rs2
 
     // 来自EX/MEM寄存器
-    input  [4:0]    ex_mem_rd,  // EX阶段的rd
-    input           ex_mem_we,  // EX阶段是否写寄存器
+    input  [4:0]    ex_mem_rd,  // EX1结果进入EX/MEM后的rd
+    input           ex_mem_we,  // EX/MEM阶段是否写寄存器
 
     // 来自MEM/WB寄存器
-    input  [4:0]    mem_wb_rd,  // MEM阶段的rd
-    input           mem_wb_we,  // MEM阶段是否写寄存器
+    input  [4:0]    mem_wb_rd,  // MEM/WB阶段的rd
+    input           mem_wb_we,  // MEM/WB阶段是否写寄存器
 
     // 输出转发控制信号
     output reg [1:0] forward_a, // rs1转发选择：00=regfile, 01=EX/MEM, 10=MEM/WB
