@@ -21,10 +21,13 @@ RUN_ENV    = LD_LIBRARY_PATH=$(COMPAT_DIR)/pipeline_test_instr:$$LD_LIBRARY_PATH
 HEX        ?= all_tests
 CLK_NS     ?= 5.2
 MAX_CYCLES ?= 300
+SIM_LOG    = sim_$(HEX)_$(subst .,p,$(CLK_NS))ns.log
+TIMING_LOG = sim_timing_$(HEX)_$(subst .,p,$(CLK_NS))ns.log
+FAIL_RE    = \[FAIL\]|\[TIMEOUT\]|Timing violation|VIOLATION|Violation|\$$setup|\$$hold
 
 VCS_OPTS = -full64 -sverilog -timescale=1ns/1ps \
            -LDFLAGS "-Wl,--no-as-needed $(COMPAT_LIB)" \
-           +define+FSDB \
+           +define+FSDB +define+GLS_NETLIST \
            -debug_acc+all -kdb -fsdb \
            +nospecify \
            +vcs+initreg+random
@@ -32,7 +35,7 @@ VCS_OPTS = -full64 -sverilog -timescale=1ns/1ps \
 # 注: 默认禁用 specify block (+nospecify) 避免大量 setup/hold violation 噪声。
 # 真正想观察时序违例可改用 SIM_OPTS_TIMING 模式。
 
-.PHONY: all compile simulate view clean clean_all sweep
+.PHONY: all compile simulate timing_check view clean clean_all sweep
 
 all: compile simulate
 
@@ -45,20 +48,34 @@ simulate:
 	    +CLK_PERIOD=$(CLK_NS) \
 	    +MAX_CYCLES=$(MAX_CYCLES) \
 	    +vcs+initreg+0 \
-	    -l sim_$(HEX)_$(subst .,p,$(CLK_NS))ns.log
+	    -l $(SIM_LOG); \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then exit $$status; fi; \
+	if grep -Eq '$(FAIL_RE)' $(SIM_LOG); then \
+	    echo "[GLS] FAIL/TIMEOUT marker found in $(SIM_LOG)"; \
+	    exit 1; \
+	fi
 
 # 时序违例检查模式（启用 specify block，含 SDF setup/hold check）
 timing_check:
 	$(VCS) -full64 -sverilog -timescale=1ns/1ps \
 	    -LDFLAGS "-Wl,--no-as-needed $(COMPAT_LIB)" \
-	    +define+FSDB -debug_acc+all -kdb -fsdb \
+	    +define+FSDB +define+GLS_NETLIST -debug_acc+all -kdb -fsdb \
+	    +vcs+initreg+random \
 	    +neg_tchk +sdfverbose \
 	    -f filelist.f -l compile_timing.log -o simv_timing
 	$(RUN_ENV) ./simv_timing \
 	    +HEX_FILE=$(HEX).hex \
 	    +CLK_PERIOD=$(CLK_NS) \
 	    +MAX_CYCLES=$(MAX_CYCLES) \
-	    -l sim_timing_$(HEX)_$(subst .,p,$(CLK_NS))ns.log
+	    +vcs+initreg+0 \
+	    -l $(TIMING_LOG); \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then exit $$status; fi; \
+	if grep -Eq '$(FAIL_RE)' $(TIMING_LOG) sdf.log; then \
+	    echo "[GLS] FAIL/TIMEOUT/timing violation marker found in $(TIMING_LOG) or sdf.log"; \
+	    exit 1; \
+	fi
 
 # 频率扫描: 5.2 / 5.4 / 5.6 / 5.8 / 6.0 ns
 sweep:

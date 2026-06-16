@@ -56,7 +56,10 @@ module btb #(
     // BTB查找逻辑（组合逻辑）
     // 命中条件：条目有效且标签匹配
     assign btb_hit = valid[fetch_index] && (tag_array[fetch_index] == fetch_tag);
-    assign predicted_target = btb_hit ? target_array[fetch_index] : 32'h0;
+    // predicted_target is only consumed when btb_hit participates in
+    // if_predicted_valid, so avoid putting the tag-compare hit logic on the
+    // 32-bit target data path.
+    assign predicted_target = target_array[fetch_index];
 
     // BTB更新逻辑（同步逻辑）
     // 更新条件：

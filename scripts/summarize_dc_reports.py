@@ -18,6 +18,14 @@ def grab(pattern, text, default="NA"):
     return match.group(1) if match else default
 
 
+def grab_first(patterns, text, default="NA"):
+    for pattern in patterns:
+        value = grab(pattern, text, default=None)
+        if value is not None:
+            return value
+    return default
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--period", required=True)
@@ -29,11 +37,29 @@ def main():
     qor = read(archive / f"{args.design}.qor.rpt")
     area = read(archive / f"{args.design}.area.rpt")
 
-    wns = grab(r"Design\s+WNS:\s+([-0-9.]+)", qor)
-    tns = grab(r"Design\s+WNS:\s+[-0-9.]+\s+TNS:\s+([-0-9.]+)", qor)
+    wns = grab_first(
+        [
+            r"Critical Path Slack:\s+([-+0-9.]+)",
+            r"Design\s+WNS:\s+([-+0-9.]+)",
+        ],
+        qor,
+    )
+    tns = grab_first(
+        [
+            r"Total Negative Slack:\s+([-+0-9.]+)",
+            r"Design\s+WNS:\s+[-+0-9.]+\s+TNS:\s+([-+0-9.]+)",
+        ],
+        qor,
+    )
     critical = grab(r"Critical Path Length:\s+([-0-9.]+)", qor)
     levels = grab(r"Levels of Logic:\s+([-0-9.]+)", qor)
-    violations = grab(r"Number of Violating Paths:\s+([-0-9.]+)", qor)
+    violations = grab_first(
+        [
+            r"No\. of Violating Paths:\s+([-+0-9.]+)",
+            r"Number of Violating Paths:\s+([-+0-9.]+)",
+        ],
+        qor,
+    )
     cell_area = grab(r"Total cell area:\s+([-0-9.]+)", area)
 
     print(

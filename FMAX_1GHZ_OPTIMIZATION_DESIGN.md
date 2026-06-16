@@ -1385,7 +1385,146 @@ This design has no violated constraints.
 - IF delayed prediction 用一拍前端气泡换取 PC/BTB 组合自反馈断开，后续若要恢复 IPC，需要更完整的 IF0/IF1/IF2 fetch queue 或 next-line predictor。
 - 下一步优先做 GLS smoke、修复 summary 脚本 slack 符号、再评估同步 SRAM/物理综合后的真实余量。
 
-### 10.7 后续记录模板
+### 10.7 2026-06-15 P5：GLS 闭环、0.95 ns 探边与低风险控制路径优化
+
+#### 目标
+
+- 补齐 1.0 ns mapped netlist 的 SDF timing GLS smoke。
+- 修复 DC summary 脚本对负 slack/TNS 的符号误读。
+- 在不考虑面积的前提下用 0.95 ns 继续探边，寻找 P4 后的下一组瓶颈。
+
+#### 验证链修复
+
+- `sim/gls/tb_gls.v`
+  - 增加 `error_count`，所有寄存器检查失败都会累计并打印最终 `[FAIL]`。
+  - reset 改为在 clock 停止时完成 assert/deassert，避免 SDF timing check 下 reset recovery/removal 违例掩盖真实功能。
+- `sim/gls/Makefile`
+  - `simulate` 和 `timing_check` 增加日志门禁，日志出现 `[FAIL]`、`[TIMEOUT]` 或 setup/hold/timing violation 关键字时 make 返回非零。
+  - `timing_check` 增加 `+define+GLS_NETLIST`，启用 Nangate DFFR GLS 初始化辅助逻辑。
+  - `timing_check` 增加 `+vcs+initreg+random` 编译选项和 `+vcs+initreg+0` 运行选项，避免未复位 BTB target 等 don't-care 状态造成 X 悲观。
+- `scripts/summarize_dc_reports.py`
+  - WNS/TNS 优先解析 QoR 前段 `Critical Path Slack` 与 `Total Negative Slack`。
+  - violation 优先解析 `No. of Violating Paths`，再兼容 `Number of Violating Paths`。
+
+脚本修复验证：
+
+```text
+p4_alufast_1p0ns_ultra: -0.04,-19.44,...,1087.00
+p4_ifpred_reg_1p0ns_ultra: 0.00,0.00,...,0.00
+```
+
+#### P5 RTL 改动
+
+- `src/pipeline_cpu_core.v` 与 `src/pipeline_cpu.v`
+  - 新增 `id_ex_hold = ex_mdu_stall_raw`。
+  - `id_ex_reg.hold` 改接 `id_ex_hold`，不再接入带 `redirect_eval_request` 屏蔽项的 `ex_mdu_stall`。
+  - 目的：ID/EX 只需要保持等待 MDU 的指令；redirect 清理由下一拍 `redirect_flush` 完成，从而把 `redirect_eval_request` 从 ID/EX 宽数据保持 mux 中移除。
+- `src/btb.v`
+  - `predicted_target` 改为直接输出 `target_array[fetch_index]`。
+  - `btb_hit` 仍由 valid/tag compare 产生；下游只在 `if_predicted_valid = if_predict_taken && if_btb_hit` 时消费 predicted target。
+  - 目的：把 tag compare/hit gating 从 32-bit target 数据路径移除，降低 `PC -> BTB target -> IF prediction register` 延迟。
+
+#### 0.95 ns 探边结果
+
+| 归档目录 | WNS | TNS | Violating Paths | Critical Path Length | 最差路径族群 | 结论 |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| `p5_0p95ns_ultra` | -0.02 ns | -14.75 | 1105 | 0.85 ns | `redirect_eval_imm_q -> u_id_ex/rs1_val_out` | RED 基线 |
+| `p5_holdsplit_0p95ns_ultra` | -0.02 ns | -8.00 | 803 | 0.85 ns | `u_pc/curr_pc -> if_predicted_pc_q/u_if_id.predict_target` | 有效，TNS 下降 |
+| `p5_holdsplit_btb_0p95ns_ultra` | 0.00 ns | -0.49 | 319 | 0.83 ns | `redirect_eval_predict_target_q -> u_if_id/*` | 最优探边点，仍非完全 clean |
+| `p5_holdsplit_btb_pcstall_0p95ns_ultra` | -0.02 ns | -10.00 | 912 | 0.84 ns | `redirect_eval_* -> u_mul_div/divisor` | 负优化，已回退 |
+| `p5_holdsplit_btb_predflush_0p95ns_ultra` | -0.05 ns | -40.71 | 1342 | 0.87 ns | `redirect_eval_imm_q -> u_mul_div/dividend_shift` | 负优化，已回退 |
+
+说明：`p5_holdsplit_btb_0p95ns_ultra` 的 worst path slack 打印为 `0.00`，但 timing report 标记 `VIOLATED: increase significant digits`，且 TNS 为 -0.49，因此不能记录为 0.95 ns clean，只能视作非常接近闭合。
+
+#### 最终 1.0 ns 综合验证
+
+最终综合命令：
+
+```sh
+make -C syn ultra CLK_PERIOD_NS=1.0
+```
+
+归档目录：
+
+```text
+syn/reports/p5_final_1p0ns_ultra/
+```
+
+QoR：
+
+| 项目 | 值 |
+| --- | ---: |
+| Critical Path Length | 0.87 ns |
+| Critical Path Slack | 0.00 ns |
+| TNS | 0.00 |
+| Violating Paths | 0 |
+| Levels of Logic | 15 |
+| Cell Area | 35460.992548 |
+
+最差 setup path：
+
+```text
+Startpoint: ex1_is_branch_reg
+Endpoint:   redirect_eval_branch_mispredict_q_reg
+Slack:      MET 0.00 ns
+```
+
+artifact 检查：
+
+```text
+timing artifact checks passed
+```
+
+对应 SDC 约束确认：
+
+| 项目 | 值 |
+| --- | ---: |
+| Clock period | 1.0 ns |
+| Clock transition | 0.05 ns |
+| Clock uncertainty | 0.10 ns |
+| Input/output delay | 0.10 ns |
+
+#### 最终功能与 GLS 验证
+
+RTL 回归：
+
+```sh
+make -C sim/pipeline_test_instr all_tests
+make -C sim/pipeline_test_instr jump_predict
+make -C sim/pipeline_test_instr m_type
+```
+
+结果：
+
+| 测试 | 结果 |
+| --- | --- |
+| `all_tests` | PASS，mispredict = 4，stall = 12 |
+| `jump_predict` | PASS，JAL/JALR BTB miss = 4，JALR target mispredict = 1 |
+| `m_type` | 28 PASS / 0 FAIL |
+
+1.0 ns SDF timing GLS：
+
+```sh
+make -C sim/gls timing_check CLK_NS=1.0 MAX_CYCLES=500
+```
+
+结果：
+
+```text
+Doing SDF annotation ...... Done
+CLK period : 1.00 ns (1000.00 MHz)
+[PASS] GLS checks completed with 0 errors.
+```
+
+日志扫查：`sim_timing_all_tests_1p0ns.log` 与 `sdf.log` 未发现 `[FAIL]`、`[TIMEOUT]`、setup/hold/timing violation。
+
+#### 当前结论
+
+- P5 后当前源码在 1.0 ns 下保持 DC clean，并通过 1.0 ns SDF timing GLS。
+- 0.95 ns 已非常接近闭合，但仍有微小负 TNS，不能作为 clean 频点。
+- 当前继续冲 0.95 ns 的主要瓶颈已从单一 ALU/BTB 路径转为 redirect/MDU/IF flush 控制交互的多路径边界；简单改 `pc_stall` 或 `if_prediction_flush` 会把压力推向 MDU 输入寄存器，已验证为负优化。
+
+### 10.8 后续记录模板
 
 后续每完成一轮优化，在此追加记录：
 
@@ -1409,13 +1548,12 @@ QoR:
 
 ## 11. 当前下一步
 
-P0 自动化、P1 MDU 高频化、P2 EX0/EX1 数据通路切分、P3 redirect eval/monitor 隔离、P4 ID0/ID1 与 IF/predictor 高频闭环已完成。当前 `pipeline_cpu_core` 在 1.0 ns `compile_ultra` 下 clean，约束报告无 violation。
+P0 自动化、P1 MDU 高频化、P2 EX0/EX1 数据通路切分、P3 redirect eval/monitor 隔离、P4 ID0/ID1 与 IF/predictor 高频闭环、P5 GLS/summary/0.95 ns 探边均已完成。当前 `pipeline_cpu_core` 在 1.0 ns `compile_ultra` 下 clean，并通过 1.0 ns SDF timing GLS。
 
 后续建议优先推进：
 
-1. 跑 1.0 ns mapped netlist GLS smoke，确认 SDF/门级功能无回归。
-2. 修复 `scripts/summarize_dc_reports.py` 对负 slack 符号的解析问题，避免后续记录误读。
-3. 为同步 instruction SRAM 增加完整 IF2 capture 或 fetch wrapper，明确预测气泡和取指返回时序。
-4. 将 data memory 接口升级为 request/response 或显式 latency，更新 load-use hazard。
-5. 若进入物理实现，加入 clock tree、placement wire delay、SRAM macro 和 reset/stall/flush 高扇出评估；当前 0.00 ns slack 没有物理余量。
-6. 若希望在保持 1GHz 的同时改善 IPC，考虑 IF fetch queue、next-line predictor 或更早的 branch target 预计算，减少 IF delayed prediction 的前端气泡。
+1. 若继续追 0.95 ns clean，优先重新审视 redirect 与 MDU 的交互协议，而不是局部改 `pc_stall` 或 `if_prediction_flush`；这两种局部实验已证明会把违例转移到 MDU divisor/dividend 寄存器。
+2. 为同步 instruction SRAM 增加完整 IF2 capture 或 fetch wrapper，明确预测气泡和取指返回时序。
+3. 将 data memory 接口升级为 request/response 或显式 latency，更新 load-use hazard。
+4. 若进入物理实现，加入 clock tree、placement wire delay、SRAM macro 和 reset/stall/flush 高扇出评估；当前 1.0 ns slack 为 0.00 ns，没有物理余量。
+5. 若希望在保持 1GHz 的同时改善 IPC，考虑 IF fetch queue、next-line predictor 或更早的 branch target 预计算，减少 IF delayed prediction 的前端气泡。

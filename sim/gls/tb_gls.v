@@ -21,6 +21,7 @@ module tb_gls;
     integer max_cycles;
     integer i;
     integer cycle_count;
+    integer error_count;
 
     wire [31:0] instr_in;
     wire [31:0] dmem_addr;
@@ -118,18 +119,22 @@ module tb_gls;
         $fsdbDumpvars(0, tb_gls);
 
         cycle_count = 0;
+        error_count = 0;
         for (i = 0; i < 32; i = i + 1)
             shadow_regs[i] = 32'b0;
 
         // Initial values
         clk    = 1'b0;
         clk_en = 1'b0;
-        // Pulse reset to create the 1->0 transition (negedge RN inside DFFR_X1)
-        // that initializes the asynchronous-reset flops.
+        // Pulse reset while the clock is stopped. With SDF timing checks enabled,
+        // deasserting an asynchronous reset close to an active clock edge creates
+        // recovery/removal violations that hide real GLS behavior.
         reset  = 1'b0;
         #1;
         reset  = 1'b1;
-        #5;
+        #(10.0 * clk_period);
+        reset = 1'b0;
+        #(10.0 * clk_period);
 
         $display("============================================================");
         $display(" Gate-Level Simulation (GLS) - pipeline_cpu_core (synthesized)");
@@ -141,11 +146,6 @@ module tb_gls;
 
         // Now enable clock generator
         clk_en = 1'b1;
-
-        // Hold reset asserted for several cycles
-        repeat (10) @(posedge clk);
-        @(negedge clk);
-        reset = 1'b0;
         $display("[%0t ns] Reset released, monitor_pc=0x%08h", $time, monitor_pc);
 
         repeat (max_cycles) @(posedge clk);
@@ -185,16 +185,24 @@ module tb_gls;
         check_reg(5'd16, 32'h00000002, "BNE target x16=2");
 
         $display("============================================================");
-        $finish;
+        if (error_count == 0) begin
+            $display(" [PASS] GLS checks completed with 0 errors.");
+            $finish;
+        end else begin
+            $display(" [FAIL] GLS checks completed with %0d errors.", error_count);
+            $finish;
+        end
     end
 
     task check_reg(input [4:0] idx, input [31:0] expected, input [511:0] label);
         begin
             if (shadow_regs[idx] === expected)
                 $display(" [PASS] %0s: x%0d = 0x%08h", label, idx, expected);
-            else
+            else begin
                 $display(" [FAIL] %0s: x%0d = 0x%08h (expected 0x%08h)",
                          label, idx, shadow_regs[idx], expected);
+                error_count = error_count + 1;
+            end
         end
     endtask
 

@@ -112,6 +112,7 @@ module pipeline_cpu (
     wire          ex_mdu_done;
     wire          ex_mdu_stall_raw;
     wire          ex_mdu_stall;
+    wire          id_ex_hold;
     wire [31:0]   ex_alu_out;     // ALU/MDU结果（MUX后）
     // Branch result
     wire          ex_branch_taken;
@@ -507,7 +508,7 @@ module pipeline_cpu (
         .clk(clk),
         .reset(reset),
         .stall(flush_id_ex),
-        .hold(ex_mdu_stall),
+        .hold(id_ex_hold),
         .flush(id_ex_flush),
         // Control signals
         .re1_in(id1_re1),
@@ -738,6 +739,9 @@ module pipeline_cpu (
     // MDU (Multiply/Divide Unit)
     assign ex_is_m_type = ex1_we && (ex1_aluop >= 8'h0b) && (ex1_aluop <= 8'h12);
     assign ex_mdu_stall_raw = ex_is_m_type && !ex_mdu_done;
+    // ID/EX only needs to preserve the instruction waiting behind an active
+    // MDU op; redirect cleanup is handled by redirect_flush on the next cycle.
+    assign id_ex_hold = ex_mdu_stall_raw;
     assign ex_mdu_start = ex_mdu_stall_raw && !redirect_block_ex && !ex_mdu_busy;
     assign ex_mdu_stall = ex_mdu_stall_raw && !redirect_block_ex;
 
