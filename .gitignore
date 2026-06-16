@@ -10,6 +10,10 @@ csrc/
 vc_hdrs.h
 ucli.key
 urgReport/
+# gls
+sim/gls/simv_*
+sim/gls/*.daidir/
+sim/gls/csrc/
 
 # VCS 日志文件
 *.log
@@ -63,3 +67,6 @@ DVEfiles/
 # OS 相关
 .DS_Store
 Thumbs.db
+
+
+.history
